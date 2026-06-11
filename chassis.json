@@ -1,0 +1,47 @@
+{
+    "@odata.id": "/redfish/v1/Chassis/chassis",
+    "@odata.type": "#Chassis.v1_22_0.Chassis",
+    "Actions": {
+        "#Chassis.Reset": {
+            "@Redfish.ActionInfo": "/redfish/v1/Chassis/chassis/ResetActionInfo",
+            "target": "/redfish/v1/Chassis/chassis/Actions/Chassis.Reset"
+        }
+    },
+    "Assembly": {
+        "@odata.id": "/redfish/v1/Chassis/chassis/Assembly"
+    },
+    "ChassisType": "RackMount",
+    "EnvironmentMetrics": {
+        "@odata.id": "/redfish/v1/Chassis/chassis/EnvironmentMetrics"
+    },
+    "Id": "chassis",
+    "Links": {
+        "ComputerSystems": [
+            {
+                "@odata.id": "/redfish/v1/Systems/system"
+            }
+        ],
+        "ManagedBy": [
+            {
+                "@odata.id": "/redfish/v1/Managers/bmc"
+            }
+        ]
+    },
+    "Name": "chassis",
+    "NetworkAdapters": {
+        "@odata.id": "/redfish/v1/Chassis/chassis/NetworkAdapters"
+    },
+    "PowerState": "Off",
+    "PowerSubsystem": {
+        "@odata.id": "/redfish/v1/Chassis/chassis/PowerSubsystem"
+    },
+    "Sensors": {
+        "@odata.id": "/redfish/v1/Chassis/chassis/Sensors"
+    },
+    "Status": {
+        "State": "StandbyOffline"
+    },
+    "ThermalSubsystem": {
+        "@odata.id": "/redfish/v1/Chassis/chassis/ThermalSubsystem"
+    }
+}

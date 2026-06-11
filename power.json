@@ -1,0 +1,4 @@
+{
+    "error": 404,
+    "message": "{\n  \"error\": {\n    \"@Message.ExtendedInfo\": [\n      {\n        \"@odata.type\": \"#Message.v1_1_1.Message\",\n        \"Message\": \"The requested resource of type  named 'Power' was not found.\",\n        \"MessageArgs\": [\n          \"\",\n          \"Power\"\n        ],\n        \"MessageId\": \"Base.1.19.ResourceNotFound\",\n        \"MessageSeverity\": \"Critical\",\n        \"Resolution\": \"Provide a valid resource identifier and resubmit the request.\"\n      }\n    ],\n    \"code\": \"Base.1.19.ResourceNotFound\",\n    \"message\": \"The requested resource of type  named 'Power' was not found.\"\n  }\n}"
+}
