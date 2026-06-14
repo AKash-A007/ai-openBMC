@@ -1,0 +1,10 @@
+Memory ECC errors indicate that memory corruption has occurred.
+
+Correctable ECC errors can be repaired by ECC mechanisms.
+
+Repeated ECC errors often indicate DIMM degradation.
+
+Recommended action:
+1. Check memory logs
+2. Run memory diagnostics
+3. Replace DIMM if error count increases

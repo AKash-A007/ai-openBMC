@@ -1,0 +1,11 @@
+CPU overheating occurs when thermal limits are exceeded.
+
+Causes:
+1. Fan failure
+2. Heatsink issue
+3. High workload
+
+Recommended action:
+1. Check thermal sensors
+2. Verify cooling system
+3. Inspect fan speeds

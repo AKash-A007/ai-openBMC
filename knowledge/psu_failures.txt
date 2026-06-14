@@ -1,0 +1,11 @@
+Power supply failures can cause system instability.
+
+Symptoms:
+1. Unexpected shutdowns
+2. Voltage fluctuations
+3. Power loss events
+
+Recommended action:
+1. Verify PSU health
+2. Replace failed PSU
+3. Check redundancy status
