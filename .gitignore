@@ -1,2 +1,7 @@
-venv/
+# .gitignore
 chroma_db/
+redfish_data/
+__pycache__/
+*.pyc
+.env
+venv/

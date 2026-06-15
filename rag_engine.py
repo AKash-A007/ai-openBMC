@@ -1,99 +1,186 @@
-#first step is to create embeddings 
+#imports 
 from sentence_transformers import SentenceTransformer
 import chromadb
 from pathlib import Path
-#knowledge base
-#preparing the knowledge base, we will read all the text files in the knowledge folder and create 
-# embeddings for them
-knowledge_base_path = Path("./knowledge")
-documnets = []
-ids = []
-# for file in knowledge_base_path.glob("*.txt"):
+import numpy as np
 
-#     if file.is_file():
-#         content = file.read_text(encoding="utf-8",errors="ignore")
-#         documnets.append(content)
-#         ids.append(file.stem)
+# ── Constants ─────────────────────────────────────────────────────────────────
+KNOWLEDGE_BASE_PATH = Path("./knowledge")
+CHROMA_DB_PATH      = "./chroma_db"
+COLLECTION_NAME     = "openbmc_docs"
+EMBED_MODEL_NAME    = "all-MiniLM-L6-v2"
+CHUNK_SIZE          = 500
+CHUNK_OVERLAP       = 50
 
-"""
-    This is the basic apporch but for this project its better to use chunking approch
-    so that it will return the exact section of the document that is relevant to the query, instead of 
-    returning the whole document.
-    The chunking approch will be implemented in the next step.
-"""
+# ── Module-level singletons (loaded once, reused forever) ─────────────────────
+_model: SentenceTransformer | None = None
+_collection = None
 
-all_chunks = []
-all_ids = []
-metadatas =[]
 
-def chunk_text(text, chunk_size=500, overlap=50):
+def _get_model() -> SentenceTransformer:
+    """Lazy-load the embedding model once per process."""
+    global _model
+    if _model is None:
+        _model = SentenceTransformer(EMBED_MODEL_NAME)
+    return _model
+
+
+def _get_collection():
     """
-    This function will take a text and chunk it into smaller chunks of size chunk_size with an 
-    overlap of overlap
-    The overlap is used to make sure that the chunks are not disjoint and the context is preserved. 
-    The overlap is the number of characters that will be repeated in the next chunk.
-    For example, if the chunk size is 500 and the overlap is 50, then the first chunk will be 
-    from 0 to 500, the second chunk will be from 450 to 950   
+    Return the ChromaDB collection.
+    Opens the persistent DB — never re-indexes.
+    Call build_index() separately to populate it.
     """
-    chunks = []
-    start = 0
+    global _collection
+    if _collection is None:
+        client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+        _collection = client.get_or_create_collection(name=COLLECTION_NAME)
+    return _collection
+
+
+# ── Indexing (run once, or when knowledge base changes) ───────────────────────
+
+def _chunk_text(text: str, chunk_size: int = CHUNK_SIZE,
+                overlap: int = CHUNK_OVERLAP) -> list[str]:
+    """
+    Split text into overlapping character-level chunks.
+    Overlap preserves context at chunk boundaries.
+    e.g. chunk_size=500, overlap=50 → chunks at [0:500], [450:950], [900:1400]…
+    """
+    chunks, start = [], 0
     while start < len(text):
-        #to calculate the end index of the chunk, we will take the minimum of the start index + chunk size and
-        #  the length of the text
         end = min(start + chunk_size, len(text))
         chunks.append(text[start:end])
-        #addressing the overlap, we will move the start index by chunk size - overlap, so that the 
-        # next chunk will start from the end of the previous chunk - overlap
         start += chunk_size - overlap
     return chunks
 
 
-for file in knowledge_base_path.glob("*.txt"):
-    text = file.read_text(encoding="utf-8",errors="ignore")
-    chunks = chunk_text(text, chunk_size=500, overlap=50)
-    for idx, chunk in enumerate(chunks):
-        all_chunks.append(chunk)
-        all_ids.append(f"{file.stem}_{idx}")
-        metadatas.append({"source": file.stem, "chunk_index": idx})
-model = SentenceTransformer('all-MiniLM-L6-v2')
-#if no documents found in the knowledge folder, raise an error
-if not all_chunks:
-    raise ValueError("No documents found in knowledge folder")
-#use batching if we have a large number of documents, this will speed up the embedding process 
-# and also reduce the memory usage
-embeddings = model.encode(
-    all_chunks,
-    batch_size=32,
-    show_progress_bar=True
-).tolist()
+def build_index(force: bool = False) -> None:
+    """
+    Read all .txt files from the knowledge folder, chunk them,
+    embed with SentenceTransformer, and store in ChromaDB.
 
-#chromadb is a vector database that can be used to store and query embeddings
-#its like the google search for my documents, it will return the most relevant documents based on the query
-client = chromadb.PersistentClient(
-    path="./chroma_db"
-)
-collection = client.get_or_create_collection(name="openbmc_docs")
-try:
-    collection.add(
-        
-        documents=all_chunks,
-        embeddings=embeddings,
-        ids=all_ids,
-        metadatas=metadatas
-    )
-except Exception as e:
-    print(f"Error adding documents to collection: {e}")
-results = collection.query(
-    query_texts=["memory ECC error"],
-    n_results=2
-)
-for doc, meta in zip(
-    results["documents"][0],
-    results["metadatas"][0]
-):
-    if meta:
-        print(f"Source: {meta['source']}")
-    else:
-        print("Source: Unknown")
+    Args:
+        force: If True, drop and rebuild the collection from scratch.
+               Use this when knowledge base files have changed.
 
-    print(doc)
+    Safe to call multiple times — skips re-indexing by default.
+    """
+    collection = _get_collection()
+
+    # Skip if already indexed and force=False
+    if not force and collection.count() > 0:
+        print(f"[RAG] Index already contains {collection.count()} chunks. "
+              "Pass force=True to rebuild.")
+        return
+
+    if force:
+        # Wipe and recreate the collection cleanly
+        client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+        client.delete_collection(name=COLLECTION_NAME)
+        global _collection
+        _collection = client.get_or_create_collection(name=COLLECTION_NAME)
+        collection = _collection
+
+    # Chunk all .txt files
+    all_chunks, all_ids, metadatas = [], [], []
+    for file in KNOWLEDGE_BASE_PATH.glob("*.txt"):
+        text = file.read_text(encoding="utf-8", errors="ignore")
+        for idx, chunk in enumerate(_chunk_text(text)):
+            all_chunks.append(chunk)
+            all_ids.append(f"{file.stem}_{idx}")
+            metadatas.append({"source": file.stem, "chunk_index": idx})
+
+    if not all_chunks:
+        raise ValueError(f"No .txt files found in {KNOWLEDGE_BASE_PATH}")
+
+    # Embed and store
+    model = _get_model()
+    embeddings = model.encode(
+        all_chunks,
+        batch_size=32,
+        show_progress_bar=True
+    ).tolist()
+
+    collection.add(documents=all_chunks, embeddings=embeddings,
+                   ids=all_ids, metadatas=metadatas)
+    print(f"[RAG] Indexed {len(all_chunks)} chunks from {KNOWLEDGE_BASE_PATH}")
+
+
+# ── Retrieval ─────────────────────────────────────────────────────────────────
+
+def _best_sentence(query: str, chunk: str) -> str:
+    """
+    Cosine re-rank at sentence level.
+    Splits on both '.' and newlines, then picks the sentence
+    most semantically similar to the query.
+    """
+    # Split on newlines first, then on periods — gives cleaner sentences
+    raw_lines = chunk.replace('\n', '|').replace('.', '.|').split('|')
+    sentences = [s.strip() for s in raw_lines if s.strip()]
+
+    if not sentences:
+        return chunk
+
+    if len(sentences) == 1:
+        return sentences[0]
+
+    model = _get_model()
+    q_emb = model.encode([query])
+    s_emb = model.encode(sentences)
+
+    q_norm = q_emb / np.linalg.norm(q_emb, axis=1, keepdims=True)
+    s_norm = s_emb / np.linalg.norm(s_emb, axis=1, keepdims=True)
+    scores  = (q_norm @ s_norm.T).flatten()
+
+    # Debug — remove after confirming correct output
+    for s, sc in zip(sentences, scores):
+        print(f"  {sc:.4f}  {s}")
+
+    return sentences[int(np.argmax(scores))]
+# this is retreving the sentence with the exact words matched higher - to change this I can add a 
+#penalty for exact word matches and boost sentences that have similar meaning but different words. I can do this 
+# by adding a small constant to the scores of sentences that have a high cosine similarity but 
+# do not have exact word matches with the query. This way, sentences that are semantically similar 
+# but do not have exact word matches will be ranked higher than sentences that have exact word matches 
+#  are not semantically similar.
+
+def rag_query(query: str, n_chunks: int = 1) -> str:
+    """
+    Main RAG entry point.
+
+    Args:
+        query   : natural language question  e.g. "Memory ECC error"
+        n_chunks: how many top chunks to retrieve before sentence re-ranking
+                  (default 1 is enough for focused answers)
+
+    Returns:
+        The single most relevant sentence from the knowledge base.
+
+    Example:
+        >>> rag_query("Memory ECC error")
+        'Repeated ECC errors often indicate DIMM degradation.'
+    """
+    collection = _get_collection()
+    if collection.count() == 0:
+        raise RuntimeError("Index is empty. Run build_index() first.")
+
+    results = collection.query(query_texts=[query], n_results=n_chunks)
+    top_chunk = results["documents"][0][0]
+    return _best_sentence(query, top_chunk)
+
+
+def search_knowledge_base(query: str, n_results: int = 1) -> dict:
+    """
+    Backwards-compatible wrapper — returns the raw ChromaDB result dict,
+    same shape as your original function.
+    Kept so nothing else in your codebase breaks.
+    """
+    collection = _get_collection()
+    return collection.query(query_texts=[query], n_results=n_results)
+
+if __name__ == "__main__":
+    # Example usage
+    build_index(force=True)  # Build the index from knowledge base files
+    answer = rag_query("Memory ECC error")
+    print(f"Answer: {answer}")
