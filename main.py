@@ -14,7 +14,8 @@ from pathlib import Path
 from rag_engine import build_index
 from parser import extract_all_events
 from agent import diagnose
-
+import signal
+import sys
 from dotenv import load_dotenv
 load_dotenv()          # reads .env automatically, no terminal setup needed
 # def run_pipeline(fetch_live: bool = False) -> None:
@@ -353,7 +354,72 @@ def clear_results():
     _save_results([])
     return {"message": "Results cleared."}
 
+@app.post("/fetch", tags=["Live QEMU"])
+def fetch_live_data():
+    """
+    Step 1: Pull fresh data from QEMU OpenBMC via Redfish.
+    Saves system.json, thermal.json, power.json to redfish_data/
+    
+    Call this BEFORE /diagnose/live
+    """
+    try:
+        from redfish_client import fetch_all
+        fetch_all()
+        return {
+            "status" : "success",
+            "message": "Live Redfish data fetched from QEMU",
+            "saved_to": "./redfish_data/",
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"QEMU unreachable at localhost:2443 — is QEMU running? Error: {e}"
+        )
 
+
+@app.get("/diagnose/live", tags=["Live QEMU"])
+def diagnose_live():
+    """
+    Step 2: Parse the saved Redfish JSON files and diagnose all real events.
+    Run /fetch first to get fresh data from QEMU.
+    
+    Returns all diagnosed events found in the real hardware state.
+    """
+    # Parse real events from saved redfish_data/ JSON files
+    try:
+        events = extract_all_events()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to parse Redfish data: {e}. Run POST /fetch first."
+        )
+
+    if not events:
+        return {
+            "status" : "ok",
+            "message": "No faults detected in live QEMU data — system healthy",
+            "events" : [],
+            "results": [],
+        }
+
+    # Diagnose each real event
+    results = []
+    for event in events:
+        try:
+            result = _run_diagnosis(event)
+            results.append(result.model_dump())
+        except HTTPException as e:
+            results.append({
+                "event" : event,
+                "error" : e.detail,
+            })
+
+    return {
+        "status"      : "ok",
+        "source"      : "live_qemu",
+        "events_found": len(results),
+        "results"     : results,
+    }
 # ── Dev runner ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

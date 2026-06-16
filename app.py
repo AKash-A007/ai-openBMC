@@ -95,6 +95,48 @@ with st.sidebar:
 """)
     st.divider()
     st.caption("Week 4 · ai-openBMC · Amritapuri")
+    # ── Add inside `with st.sidebar:` after the existing divider ──────────
+
+    st.divider()
+    st.subheader("🔴 Live QEMU Mode")
+
+    # Step 1: Fetch button
+    if st.button("📡 Fetch from QEMU", use_container_width=True):
+        with st.spinner("Connecting to OpenBMC QEMU on localhost:2443..."):
+            try:
+                r = requests.post(f"{API_BASE}/fetch", timeout=15)
+                if r.status_code == 200:
+                    st.success("✅ Live data fetched!")
+                    st.session_state["live_fetched"] = True
+                else:
+                    st.error(f"❌ {r.json().get('detail', 'Fetch failed')}")
+                    st.session_state["live_fetched"] = False
+            except Exception as e:
+                st.error(f"❌ QEMU unreachable: {e}")
+                st.session_state["live_fetched"] = False
+
+    # Step 2: Diagnose live button (only enabled after fetch)
+    live_ready = st.session_state.get("live_fetched", False)
+
+    if st.button(
+        "🧠 Diagnose Live Events",
+        use_container_width=True,
+        disabled=not live_ready,
+        type="primary" if live_ready else "secondary",
+    ):
+        with st.spinner("Diagnosing real QEMU events..."):
+            try:
+                r = requests.get(f"{API_BASE}/diagnose/live", timeout=120)
+                if r.status_code == 200:
+                    data = r.json()
+                    st.session_state["live_results"] = data
+                else:
+                    st.error(f"❌ {r.json().get('detail', 'Diagnosis failed')}")
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
+
+    if not live_ready:
+        st.caption("⬆️ Fetch from QEMU first to enable live diagnosis")
 
 
 # ── Main layout — two columns ─────────────────────────────────────────────────
@@ -210,3 +252,42 @@ if history:
             c2.markdown(f"**Recommendation:** {item.get('recommendation','—')}")
 else:
     st.caption("No diagnosis history yet — run your first scenario above.")
+# ── Live QEMU Results ─────────────────────────────────────────────────────────
+
+if "live_results" in st.session_state:
+    data = st.session_state["live_results"]
+    st.divider()
+    st.subheader("🔴 Live QEMU Diagnosis Results")
+
+    results = data.get("results", [])
+
+    if not results:
+        st.success("✅ No faults detected — QEMU system is healthy")
+    else:
+        st.warning(f"⚠️ {len(results)} fault(s) detected in live QEMU data")
+
+        for i, item in enumerate(results, 1):
+            if "error" in item:
+                st.error(f"Event {i}: {item['error']}")
+                continue
+
+            ev   = item.get("event", {})
+            sev  = item.get("severity", "UNKNOWN")
+            icon = SEVERITY_COLORS.get(sev, "⚪")
+
+            with st.expander(
+                f"{icon} [{i}] `{ev.get('sensor','?')}` — "
+                f"{ev.get('event','?')}",
+                expanded=True,
+            ):
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Severity",   f"{icon} {sev}")
+                c2.metric("Confidence", item.get("confidence", "—"))
+                c3.metric("Immediate?",
+                          "YES ⚠️" if item.get("requires_immediate_action") else "No")
+
+                st.markdown(f"**🔍 Root Cause:** {item.get('root_cause','—')}")
+                st.markdown(f"**🛠️ Recommendation:** {item.get('recommendation','—')}")
+
+                with st.expander("📚 RAG Context"):
+                    st.caption(item.get("rag_context", "—"))

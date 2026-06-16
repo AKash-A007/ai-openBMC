@@ -30,3 +30,4 @@ output -root cause + severity + confidence +recommendation
 
 connect everthing together in a file 
 """"
+"""404 thermal and power error in romulus in qemu is normal as these path do not exist in that """
