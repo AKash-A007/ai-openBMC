@@ -19,14 +19,27 @@ DATA_DIR  = Path("./redfish_data")   # ← all saves go here
 def get_redfish(path: str) -> dict:
     url = f"{BASE_URL}{path}"
     try:
-        response = requests.get(url, auth=(USERNAME, PASSWORD),
-                                verify=False, timeout=10)
+        response = requests.get(
+            url,
+            auth=(USERNAME, PASSWORD),
+            verify=False,
+            timeout=5,              # ← reduced from 10 to 5 for faster failure
+        )
         print(f"  GET {path}  →  {response.status_code}")
         return response.json() if response.status_code == 200 else {
             "error": response.status_code, "message": response.text
         }
+
+    except requests.exceptions.ConnectionError:
+        # QEMU not running — port refused
+        raise ConnectionError(f"Cannot reach OpenBMC at {BASE_URL} — is QEMU running?")
+
+    except requests.exceptions.Timeout:
+        # QEMU booting or too slow
+        raise TimeoutError(f"OpenBMC at {BASE_URL} timed out — still booting?")
+
     except Exception as e:
-        return {"error": str(e)}
+        raise RuntimeError(f"Redfish request failed: {e}")
 
 
 def save_json(filename: str, data: dict) -> None:
