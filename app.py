@@ -6,9 +6,11 @@ Run with:
     streamlit run app.py
 """
 from dotenv import load_dotenv
+import urllib3
 load_dotenv()          # reads .env automatically, no terminal setup needed
 import requests
 import streamlit as st
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
