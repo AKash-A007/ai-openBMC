@@ -100,22 +100,88 @@ with st.sidebar:
     st.divider()
     st.subheader("🔴 Live QEMU Mode")
 
-    # Step 1: Fetch button
-    if st.button("📡 Fetch from QEMU", use_container_width=True):
-        with st.spinner("Connecting to OpenBMC QEMU on localhost:2443..."):
+    # ── BMC connection check (fast, separate from fetch) ──────────────────
+    def check_bmc() -> dict:
+        """Quick probe — just hits /redfish/v1, doesn't save anything."""
+        try:
+            import requests as _r
+            resp = _r.get(
+                "https://localhost:2443/redfish/v1",
+                auth=("root", "0penBmc"),
+                verify=False,
+                timeout=3,
+            )
+            if resp.status_code == 200:
+                return {"status": "online"}
+            return {"status": "error", "code": resp.status_code}
+        except Exception:
+            return {"status": "offline"}
+
+    bmc = check_bmc()
+
+    # Show BMC status badge
+    if bmc["status"] == "online":
+        st.success("🟢 BMC Online — QEMU is running")
+        bmc_ready = True
+    elif bmc["status"] == "error":
+        st.warning(f"🟡 BMC responded with error {bmc.get('code')} — still booting?")
+        bmc_ready = False
+    else:
+        st.error("🔴 No BMC Found — QEMU is not running")
+        st.code(
+            "qemu-system-arm \\\n"
+            "  -machine romulus-bmc \\\n"
+            "  -m 512 \\\n"
+            "  -drive file=tmp/deploy/images/romulus/\n"
+            "    obmc-phosphor-image-romulus.static.mtd,\n"
+            "    if=mtd,format=raw \\\n"
+            "  -serial mon:stdio -serial null \\\n"
+            "  -netdev user,id=net0,hostfwd=tcp::2443-:443 \\\n"
+            "  -net nic,netdev=net0",
+            language="bash"
+        )
+        bmc_ready = False
+
+    st.divider()
+
+    # ── Step 1: Fetch button (disabled if BMC offline) ─────────────────────
+    if st.button(
+        "📡 Fetch from QEMU",
+        use_container_width=True,
+        disabled=not bmc_ready,
+    ):
+        with st.spinner("Fetching live data from OpenBMC..."):
             try:
                 r = requests.post(f"{API_BASE}/fetch", timeout=15)
                 if r.status_code == 200:
                     st.success("✅ Live data fetched!")
                     st.session_state["live_fetched"] = True
                 else:
-                    st.error(f"❌ {r.json().get('detail', 'Fetch failed')}")
+                    # Parse structured error from FastAPI
+                    detail = r.json().get("detail", {})
+                    err    = detail.get("error",   "Fetch failed")
+                    msg    = detail.get("message", str(detail))
+                    hint   = detail.get("hint",    "")
+
+                    if err == "BMC_NOT_FOUND":
+                        st.error("🔴 No BMC Found — QEMU is not running")
+                    elif err == "BMC_TIMEOUT":
+                        st.warning("🟡 BMC Timeout — QEMU still booting, wait and retry")
+                    else:
+                        st.error(f"❌ {msg}")
+
+                    if hint:
+                        st.caption(f"💡 {hint}")
                     st.session_state["live_fetched"] = False
+
             except Exception as e:
-                st.error(f"❌ QEMU unreachable: {e}")
+                st.error(f"❌ Cannot reach FastAPI backend: {e}")
                 st.session_state["live_fetched"] = False
 
-    # Step 2: Diagnose live button (only enabled after fetch)
+    if not bmc_ready:
+        st.caption("⬆️ Start QEMU to enable live fetch")
+
+    # ── Step 2: Diagnose live (only enabled after successful fetch) ─────────
     live_ready = st.session_state.get("live_fetched", False)
 
     if st.button(
@@ -128,8 +194,7 @@ with st.sidebar:
             try:
                 r = requests.get(f"{API_BASE}/diagnose/live", timeout=120)
                 if r.status_code == 200:
-                    data = r.json()
-                    st.session_state["live_results"] = data
+                    st.session_state["live_results"] = r.json()
                 else:
                     st.error(f"❌ {r.json().get('detail', 'Diagnosis failed')}")
             except Exception as e:

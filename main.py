@@ -355,27 +355,52 @@ def clear_results():
     return {"message": "Results cleared."}
 
 @app.post("/fetch", tags=["Live QEMU"])
+@app.post("/fetch", tags=["Live QEMU"])
 def fetch_live_data():
     """
-    Step 1: Pull fresh data from QEMU OpenBMC via Redfish.
-    Saves system.json, thermal.json, power.json to redfish_data/
-    
-    Call this BEFORE /diagnose/live
+    Pull fresh data from QEMU OpenBMC via Redfish.
+    Returns clear error if QEMU is not running.
     """
     try:
         from redfish_client import fetch_all
         fetch_all()
         return {
-            "status" : "success",
-            "message": "Live Redfish data fetched from QEMU",
+            "status"  : "success",
+            "message" : "Live Redfish data fetched from QEMU",
             "saved_to": "./redfish_data/",
         }
-    except Exception as e:
+
+    except ConnectionError as e:
+        # QEMU not running — port refused
         raise HTTPException(
             status_code=503,
-            detail=f"QEMU unreachable at localhost:2443 — is QEMU running? Error: {e}"
+            detail={
+                "error"  : "BMC_NOT_FOUND",
+                "message": str(e),
+                "hint"   : "Start QEMU first: qemu-system-arm -machine romulus-bmc ...",
+            }
         )
 
+    except TimeoutError as e:
+        # QEMU booting
+        raise HTTPException(
+            status_code=504,
+            detail={
+                "error"  : "BMC_TIMEOUT",
+                "message": str(e),
+                "hint"   : "Wait 2-3 minutes for QEMU to fully boot, then retry.",
+            }
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error"  : "FETCH_FAILED",
+                "message": str(e),
+                "hint"   : "Check QEMU terminal for errors.",
+            }
+        )
 
 @app.get("/diagnose/live", tags=["Live QEMU"])
 def diagnose_live():
