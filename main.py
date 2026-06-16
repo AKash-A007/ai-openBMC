@@ -1,13 +1,13 @@
-#this is the file so that we can run the entire pipeline together 
-"""
-main.py  —  Orchestrator
-Run this to execute the full pipeline:
-  1. (Optional) Fetch live Redfish data from OpenBMC
-  2. Build RAG index from knowledge base
-  3. Parse events from saved JSON files
-  4. Diagnose each event with RAG + LLM
-  5. Print results
-"""
+# #this is the file so that we can run the entire pipeline together 
+# """
+# main.py  —  Orchestrator
+# Run this to execute the full pipeline:
+#   1. (Optional) Fetch live Redfish data from OpenBMC
+#   2. Build RAG index from knowledge base
+#   3. Parse events from saved JSON files
+#   4. Diagnose each event with RAG + LLM
+#   5. Print results
+# """
 
 import json
 from pathlib import Path
@@ -15,55 +15,347 @@ from rag_engine import build_index
 from parser import extract_all_events
 from agent import diagnose
 
+from dotenv import load_dotenv
+load_dotenv()          # reads .env automatically, no terminal setup needed
+# def run_pipeline(fetch_live: bool = False) -> None:
 
-def run_pipeline(fetch_live: bool = False) -> None:
+#     # ── Step 1: Optionally fetch live Redfish data ─────────────────────────────
+#     if fetch_live:
+#         print("=" * 50)
+#         print("STEP 1: Fetching live Redfish data from OpenBMC")
+#         print("=" * 50)
+#         from redfish_client import fetch_all
+#         fetch_all()
+#     else:
+#         print("[Main] Using saved JSON files from ./redfish_data/")
 
-    # ── Step 1: Optionally fetch live Redfish data ─────────────────────────────
-    if fetch_live:
-        print("=" * 50)
-        print("STEP 1: Fetching live Redfish data from OpenBMC")
-        print("=" * 50)
-        from redfish_client import fetch_all
-        fetch_all()
-    else:
-        print("[Main] Using saved JSON files from ./redfish_data/")
+#     # ── Step 2: Build RAG index ────────────────────────────────────────────────
+#     print("\n" + "=" * 50)
+#     print("STEP 2: Building RAG index")
+#     print("=" * 50)
+#     build_index()   # skips automatically if already built
 
-    # ── Step 2: Build RAG index ────────────────────────────────────────────────
-    print("\n" + "=" * 50)
-    print("STEP 2: Building RAG index")
-    print("=" * 50)
-    build_index()   # skips automatically if already built
+#     # ── Step 3: Extract events from saved JSON files ───────────────────────────
+#     print("\n" + "=" * 50)
+#     print("STEP 3: Extracting events from saved JSON files")
+#     print("=" * 50)
+#     events = extract_all_events()
 
-    # ── Step 3: Extract events from saved JSON files ───────────────────────────
-    print("\n" + "=" * 50)
-    print("STEP 3: Extracting events from saved JSON files")
-    print("=" * 50)
-    events = extract_all_events()
+#     if not events:
+#         print("[Main] No events to diagnose. Exiting.")
+#         return
 
-    if not events:
-        print("[Main] No events to diagnose. Exiting.")
-        return
+#     # ── Step 4: Diagnose each event ────────────────────────────────────────────
+#     print("\n" + "=" * 50)
+#     print(f"STEP 4: Diagnosing {len(events)} event(s)")
+#     print("=" * 50)
 
-    # ── Step 4: Diagnose each event ────────────────────────────────────────────
-    print("\n" + "=" * 50)
-    print(f"STEP 4: Diagnosing {len(events)} event(s)")
-    print("=" * 50)
+#     results = []
+#     for i, event in enumerate(events, 1):
+#         print(f"\n[{i}/{len(events)}] {event['sensor']} — {event['event']}")
+#         result = diagnose(event)
+#         results.append(result)
+#         print(json.dumps(result, indent=2))
 
-    results = []
-    for i, event in enumerate(events, 1):
-        print(f"\n[{i}/{len(events)}] {event['sensor']} — {event['event']}")
-        result = diagnose(event)
-        results.append(result)
-        print(json.dumps(result, indent=2))
+#     # ── Step 5: Save results ───────────────────────────────────────────────────
+#     output_path = Path("./diagnosis_results.json")
+#     with open(output_path, "w") as f:
+#         json.dump(results, f, indent=2)
+#     print(f"\n[Main] Results saved → {output_path}")
 
-    # ── Step 5: Save results ───────────────────────────────────────────────────
-    output_path = Path("./diagnosis_results.json")
-    with open(output_path, "w") as f:
+
+# if __name__ == "__main__":
+#     # fetch_live=False  → use saved JSON files (current phase)
+#     # fetch_live=True   → hit live OpenBMC Redfish endpoints first
+#     run_pipeline(fetch_live=False)
+"""
+    use the above for refrence to make the fastapi and streamlit work together in one file
+"""
+"""
+main.py  —  Week 4 FastAPI Backend
+AI OpsBMC Diagnostics Service
+
+Endpoints:
+  GET  /health             → service status + index info
+  GET  /scenarios          → list all available mock scenarios
+  GET  /scenario/{name}    → get a specific scenario event dict
+  POST /diagnose           → run full RAG + LLM diagnosis on an event
+  POST /diagnose/scenario  → diagnose by scenario name directly
+  GET  /results            → list all past diagnosis results
+"""
+
+import json
+import time
+from pathlib import Path
+from datetime import datetime
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from rag_engine import build_index, _get_collection
+from parser import extract_all_events
+from agent import diagnose
+
+
+# ── Pydantic models (request / response shapes) ────────────────────────────────
+
+class EventInput(BaseModel):
+    """Input for POST /diagnose"""
+    sensor: str
+    event: str
+    severity: str = "WARNING"           # default if caller omits it
+
+
+class ScenarioRequest(BaseModel):
+    """Input for POST /diagnose/scenario"""
+    name: str                            # e.g. "dimm_failure"
+
+
+class DiagnosisResponse(BaseModel):
+    """Structured response returned by all diagnosis endpoints"""
+    event: dict
+    root_cause: str
+    severity: str
+    confidence: str
+    recommendation: str
+    requires_immediate_action: bool
+    rag_context: str
+    timestamp: str
+    duration_ms: float
+
+
+# ── Mock scenarios (replaces generate_sel_log from Week 3) ────────────────────
+
+SCENARIOS: dict[str, dict] = {
+    "dimm_failure": {
+        "sensor"  : "DIMM_B2",
+        "event"   : "Memory ECC Error",
+        "severity": "WARNING",
+    },
+    "cpu_overheat": {
+        "sensor"  : "CPU0",
+        "event"   : "CPU Over Temperature",
+        "severity": "CRITICAL",
+    },
+    "psu_failure": {
+        "sensor"  : "PSU1",
+        "event"   : "Power Supply Failure",
+        "severity": "CRITICAL",
+    },
+    "fan_fault": {
+        "sensor"  : "FAN_3",
+        "event"   : "Fan Fault",
+        "severity": "WARNING",
+    },
+    "voltage_fault": {
+        "sensor"  : "VR_CPU0",
+        "event"   : "Voltage Fault",
+        "severity": "CRITICAL",
+    },
+}
+
+
+# ── Results store (in-memory, persisted to JSON) ──────────────────────────────
+
+RESULTS_PATH = Path("./diagnosis_results.json")
+
+def _load_results() -> list:
+    if RESULTS_PATH.exists():
+        with open(RESULTS_PATH) as f:
+            return json.load(f)
+    return []
+
+def _save_results(results: list) -> None:
+    with open(RESULTS_PATH, "w") as f:
         json.dump(results, f, indent=2)
-    print(f"\n[Main] Results saved → {output_path}")
 
+
+# ── Lifespan: startup tasks (build index once when server starts) ──────────────
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Runs on startup — builds RAG index if not already built."""
+    print("[Main] Starting AI OpsBMC service...")
+    try:
+        build_index()           # skips if already built
+        print("[Main] RAG index ready.")
+    except Exception as e:
+        print(f"[Main] WARNING: Could not build index: {e}")
+    yield
+    print("[Main] Shutting down.")
+
+
+# ── FastAPI app ────────────────────────────────────────────────────────────────
+
+app = FastAPI(
+    title="AI OpsBMC Diagnostics",
+    description="RAG + LLM-powered OpenBMC hardware diagnostics engine",
+    version="0.4.0",
+    lifespan=lifespan,
+)
+
+# Allow Streamlit (running on :8501) to call this API
+"""
+CORS Middleware is a component used in web frameworks to manage Cross-Origin Resource Sharing by 
+setting appropriate HTTP headers (like Access-Control-Allow-Origin) and handling preflight requests 
+(OPTIONS requests) for complex cross-domain requests"""
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _run_diagnosis(event_dict: dict) -> DiagnosisResponse:
+    """
+    Core helper: run the full diagnosis pipeline and return a structured response.
+    Wraps agent.diagnose() with timing, error handling, and result persistence.
+    """
+    start = time.time()
+
+    try:
+        raw = diagnose(event_dict)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Diagnosis failed: {e}")
+
+    if "error" in raw:
+        raise HTTPException(status_code=422, detail=raw["error"])
+
+    duration_ms = round((time.time() - start) * 1000, 2)
+    timestamp   = datetime.utcnow().isoformat() + "Z"
+
+    response = DiagnosisResponse(
+        event                    = event_dict,
+        root_cause               = raw.get("root_cause", "Unknown"),
+        severity                 = raw.get("severity",   "UNKNOWN"),
+        confidence               = raw.get("confidence", "0%"),
+        recommendation           = raw.get("recommendation", "No action available"),
+        requires_immediate_action= raw.get("requires_immediate_action", False),
+        rag_context              = raw.get("rag_context", ""),
+        timestamp                = timestamp,
+        duration_ms              = duration_ms,
+    )
+
+    # Persist to results file
+    results = _load_results()
+    results.append(response.model_dump())
+    _save_results(results)
+
+    return response
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@app.get("/health", tags=["System"])
+def health_check():
+    """
+    Returns service status and RAG index info.
+    Streamlit uses this to verify the backend is alive.
+    """
+    try:
+        collection  = _get_collection()
+        chunk_count = collection.count()
+        index_ok    = chunk_count > 0
+    except Exception:
+        chunk_count = 0
+        index_ok    = False
+
+    return {
+        "status"      : "healthy" if index_ok else "degraded",
+        "rag_index"   : "ready"   if index_ok else "empty — run build_index()",
+        "chunks"      : chunk_count,
+        "scenarios"   : list(SCENARIOS.keys()),
+        "timestamp"   : datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@app.get("/scenarios", tags=["Scenarios"])
+def list_scenarios():
+    """Return all available mock scenarios."""
+    return {
+        "scenarios": [
+            {"name": name, "sensor": s["sensor"], "event": s["event"],
+             "severity": s["severity"]}
+            for name, s in SCENARIOS.items()
+        ]
+    }
+
+
+@app.get("/scenario/{name}", tags=["Scenarios"])
+def get_scenario(name: str):
+    """
+    Return the raw event dict for a named scenario.
+    Streamlit calls this before POST /diagnose.
+
+    Example: GET /scenario/dimm_failure
+    → {"sensor": "DIMM_B2", "event": "Memory ECC Error", "severity": "WARNING"}
+    """
+    if name not in SCENARIOS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Scenario '{name}' not found. "
+                   f"Available: {list(SCENARIOS.keys())}"
+        )
+    return {"name": name, "event": SCENARIOS[name]}
+
+
+@app.post("/diagnose", response_model=DiagnosisResponse, tags=["Diagnosis"])
+def diagnose_event(event: EventInput):
+    """
+    Run full RAG + LLM diagnosis on a raw event.
+
+    Input:
+        {"sensor": "DIMM_B2", "event": "Memory ECC Error", "severity": "WARNING"}
+
+    Output:
+        {"root_cause": "...", "severity": "HIGH", "confidence": "87%", ...}
+    """
+    return _run_diagnosis(event.model_dump())
+
+
+@app.post("/diagnose/scenario", response_model=DiagnosisResponse, tags=["Diagnosis"])
+def diagnose_by_scenario(req: ScenarioRequest):
+    """
+    Diagnose by scenario name — Streamlit's main call after user selects from dropdown.
+
+    Input:  {"name": "dimm_failure"}
+    Output: full DiagnosisResponse
+    """
+    if req.name not in SCENARIOS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Scenario '{req.name}' not found."
+        )
+    return _run_diagnosis(SCENARIOS[req.name])
+
+
+@app.get("/results", tags=["History"])
+def get_results(limit: int = 20):
+    """
+    Return the last `limit` diagnosis results from the persistent store.
+    Streamlit uses this to show history.
+    """
+    results = _load_results()
+    return {
+        "total"  : len(results),
+        "results": results[-limit:][::-1],   # newest first
+    }
+
+
+@app.delete("/results", tags=["History"])
+def clear_results():
+    """Clear all stored diagnosis results."""
+    _save_results([])
+    return {"message": "Results cleared."}
+
+
+# ── Dev runner ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    # fetch_live=False  → use saved JSON files (current phase)
-    # fetch_live=True   → hit live OpenBMC Redfish endpoints first
-    run_pipeline(fetch_live=False)
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
