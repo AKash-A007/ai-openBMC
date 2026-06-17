@@ -21,3 +21,14 @@
     - efficient for small to medium-sized datasets, which is typical for edge applications.
 """
 
+import sqlite3
+# schema i want to use 
+"""
+    CREATE TABLE telemetry(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT,
+    sensor TEXT,
+    value REAL,
+    status TEXT
+);
+"""
