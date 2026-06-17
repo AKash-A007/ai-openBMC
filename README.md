@@ -333,3 +333,255 @@ MIT License — see [LICENSE](LICENSE)
 ---
 
 *Built at my home Akash A  · OpenBMC Project · Phase A*
+
+What is SQL Injection?
+
+Imagine your code builds SQL like this:
+
+username = input("Enter username: ")
+
+query = f"""
+SELECT *
+FROM users
+WHERE username = '{username}'
+"""
+
+Suppose a normal user enters:
+
+akash
+
+The query becomes:
+
+SELECT *
+FROM users
+WHERE username = 'akash'
+
+Perfectly fine.
+
+Attacker Input
+
+Now imagine an attacker enters:
+
+' OR 1=1 --
+
+The query becomes:
+
+SELECT *
+FROM users
+WHERE username = '' OR 1=1 --'
+
+Let's analyze it:
+
+''          -> empty username
+OR 1=1      -> always true
+--          -> comment out the rest
+
+SQL sees:
+
+SELECT *
+FROM users
+WHERE '' OR 1=1
+
+Since:
+
+1 = 1
+
+is always true, the database returns all users.
+
+This is SQL Injection.
+
+The attacker changed the meaning of your SQL statement.
+
+Another Dangerous Example
+
+Suppose you write:
+
+sensor = input()
+
+query = f"""
+DELETE FROM telemetry
+WHERE sensor = '{sensor}'
+"""
+
+Attacker enters:
+
+CPU_TEMP' OR 1=1 --
+
+Query becomes:
+
+DELETE FROM telemetry
+WHERE sensor = 'CPU_TEMP' OR 1=1 --'
+
+Meaning:
+
+DELETE ALL ROWS
+
+Catastrophic.
+
+Why String Formatting Is Dangerous
+
+When you use:
+
+f"...{value}..."
+
+Python creates the final SQL text before SQLite sees it.
+
+SQLite cannot distinguish:
+
+This is SQL syntax
+
+from
+
+This is user data
+
+Everything is mixed together.
+
+How Parameterized Queries Work
+
+Consider:
+
+cursor.execute(
+"""
+INSERT INTO telemetry(timestamp, sensor, value, status)
+VALUES (?, ?, ?, ?)
+""",
+(timestamp, sensor, value, status)
+)
+
+Notice:
+
+?
+
+These are placeholders.
+
+Internal Process
+
+Suppose:
+
+sensor = "CPU_TEMP"
+
+SQLite receives:
+
+INSERT INTO telemetry(timestamp,sensor,value,status)
+VALUES(?,?,?,?)
+
+and separately:
+
+(
+"2026-06-17",
+"CPU_TEMP",
+74.0,
+"OK"
+)
+
+The SQL statement and data are transmitted separately.
+
+Attacker Tries Again
+
+Suppose attacker enters:
+
+' OR 1=1 --
+
+With parameterized query:
+
+cursor.execute(
+"""
+SELECT *
+FROM telemetry
+WHERE sensor = ?
+""",
+("' OR 1=1 --",)
+)
+
+SQLite treats it as:
+
+literal string value
+
+not SQL code.
+
+It effectively searches for:
+
+sensor = "' OR 1=1 --"
+
+which is just text.
+
+No rows match.
+
+Nothing bad happens.
+
+Visual Analogy
+Vulnerable
+query = f"""
+SELECT * FROM users
+WHERE username='{user_input}'
+"""
+
+Think of it like:
+
+SQL + User Input
+       ↓
+Mixed Together
+       ↓
+Database Executes Everything
+Safe
+cursor.execute(
+"SELECT * FROM users WHERE username=?",
+(user_input,)
+)
+
+Think of it like:
+
+SQL Template
+       +
+Separate Data
+       ↓
+Database Knows Difference
+       ↓
+Data Cannot Become Code
+Real Example with Your Telemetry Project
+
+Bad:
+
+cursor.execute(
+f"""
+INSERT INTO telemetry
+VALUES(NULL,
+'{timestamp}',
+'{sensor}',
+{value},
+'{status}')
+"""
+)
+
+If sensor contains:
+
+CPU_TEMP'); DROP TABLE telemetry; --
+
+the resulting SQL may become:
+
+INSERT INTO telemetry
+VALUES(NULL,
+'2026-06-17',
+'CPU_TEMP');
+
+DROP TABLE telemetry;
+
+Potentially destroying your table.
+
+Safe:
+
+cursor.execute(
+"""
+INSERT INTO telemetry(timestamp,sensor,value,status)
+VALUES(?,?,?,?)
+""",
+(timestamp, sensor, value, status)
+)
+
+SQLite stores:
+
+CPU_TEMP'); DROP TABLE telemetry; --
+
+as plain text inside the sensor column.
+
+The DROP TABLE is never executed.
