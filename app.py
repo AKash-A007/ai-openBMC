@@ -1,6 +1,6 @@
 """
-app.py  —  Week 4 Streamlit Dashboard
-AI OpsBMC Diagnostics UI
+app.py  —  Phase C Week 4 Streamlit Dashboard
+AI OpsBMC Autonomous Operations Platform
 
 Run with:
     streamlit run app.py
@@ -63,16 +63,78 @@ def get_history() -> list:
         return []
 
 
+# ── Phase C Week 4: New API helper functions ─────────────────────────────────
+
+def remediate(issue: str, action: str, sensor: str, severity: str) -> dict:
+    try:
+        r = requests.post(
+            f"{API_BASE}/remediate",
+            json={"issue": issue, "action": action, "sensor": sensor, "severity": severity},
+            timeout=30,
+        )
+        return r.json() if r.status_code == 200 else {"error": r.json().get("detail", "Remediation error")}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def get_approvals() -> dict:
+    try:
+        r = requests.get(f"{API_BASE}/approvals", timeout=5)
+        return r.json() if r.status_code == 200 else {"total": 0, "requests": [], "stats": {}}
+    except Exception:
+        return {"total": 0, "requests": [], "stats": {}}
+
+
+def approve_action(request_id: str) -> dict:
+    try:
+        r = requests.post(
+            f"{API_BASE}/approvals/{request_id}/approve",
+            json={"resolved_by": "ops-dashboard"},
+            timeout=30,
+        )
+        return r.json() if r.status_code == 200 else {"error": r.json().get("detail", "Approve failed")}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def reject_action(request_id: str) -> dict:
+    try:
+        r = requests.post(
+            f"{API_BASE}/approvals/{request_id}/reject",
+            json={"resolved_by": "ops-dashboard", "notes": "Rejected from dashboard"},
+            timeout=10,
+        )
+        return r.json() if r.status_code == 200 else {"error": r.json().get("detail", "Reject failed")}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def get_audit_log() -> dict:
+    try:
+        r = requests.get(f"{API_BASE}/audit?limit=30", timeout=5)
+        return r.json() if r.status_code == 200 else {"total": 0, "entries": [], "stats": {}}
+    except Exception:
+        return {"total": 0, "entries": [], "stats": {}}
+
+
+def get_incidents() -> dict:
+    try:
+        r = requests.get(f"{API_BASE}/incidents?limit=10", timeout=5)
+        return r.json() if r.status_code == 200 else {"total": 0, "incidents": []}
+    except Exception:
+        return {"total": 0, "incidents": []}
+
+
 # ── Page setup ────────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="AI OpsBMC",
-    page_icon="🖥️",
+    page_title="AI OpsBMC — Autonomous Operations",
+    page_icon="🤖",
     layout="wide",
 )
 
-st.title("🖥️ AI OpsBMC — Hardware Diagnostics Dashboard")
-st.caption("RAG + LLM powered OpenBMC fault analysis engine")
+st.title("🤖 AI OpsBMC — Autonomous Enterprise AIOps Platform")
+st.caption("Phase C Week 4 · Detect → Diagnose → Predict → Recommend → **Approve → Execute → Audit**")
 
 # ── Sidebar — health + info ───────────────────────────────────────────────────
 
@@ -88,16 +150,18 @@ with st.sidebar:
         st.error("❌ Backend offline — start with `uvicorn main:app --reload`")
 
     st.divider()
-    st.header("How It Works")
+    st.header("Pipeline")
     st.markdown("""
-1. Select a fault scenario
-2. Click **Run Diagnosis**
-3. FastAPI → RAG Engine → Qwen3-8B
-4. View Root Cause Analysis
+1. 🔍 **Detect** — Telemetry anomaly
+2. 🧠 **Diagnose** — RAG + LLM root cause
+3. 📈 **Predict** — Failure probability
+4. 🛠️ **Recommend** — Action suggestion
+5. ✅ **Approve** — Policy gate
+6. ⚡ **Execute** — Autonomous action
+7. 📓 **Audit** — Full trail
 """)
     st.divider()
-    st.caption("Week 4 · ai-openBMC · Amritapuri")
-    # ── Add inside `with st.sidebar:` after the existing divider ──────────
+    st.caption("Phase C Week 4 · ai-openBMC · Amritapuri")
 
     st.divider()
     st.subheader("🔴 Live QEMU Mode")
@@ -240,7 +304,11 @@ with left:
         language="yaml"
     )
 
-    run_btn = st.button("🔍 Run Diagnosis", type="primary", use_container_width=True)
+    b1, b2 = st.columns(2)
+    run_btn      = b1.button("🔍 Run Diagnosis",     type="primary",     use_container_width=True)
+    remediate_btn = b2.button("🔧 Auto-Remediate",  type="secondary",   use_container_width=True,
+                              disabled=not health,
+                              help="Run diagnosis then auto-execute via Policy Engine")
 
 # ── Right: diagnosis result ───────────────────────────────────────────────────
 
@@ -290,6 +358,48 @@ with right:
 
             elif result and "error" in result:
                 st.error(f"Diagnosis failed: {result['error']}")
+    elif remediate_btn:
+        if not health:
+            st.error("Backend is offline.")
+        else:
+            with st.spinner("🧠 Running diagnosis..."):
+                result = run_diagnosis(selected_key)
+            if result and "error" not in result:
+                # Store last diagnosis for display
+                rec    = result.get("recommendation", "")
+                sensor = result.get("event", {}).get("sensor", ev["sensor"])
+                sev    = result.get("severity", "UNKNOWN")
+
+                st.markdown(f"**🧠 Diagnosis:** {result.get('root_cause', '—')}")
+                st.markdown(f"**🛠️ Recommendation:** `{rec}`")
+
+                with st.spinner(f"⚡ Routing '{rec}' through Policy Engine..."):
+                    rem_result = remediate(
+                        issue    = selected_key.upper(),
+                        action   = rec,
+                        sensor   = sensor,
+                        severity = sev,
+                    )
+
+                if "error" in rem_result:
+                    st.error(f"❌ Remediation error: {rem_result['error']}")
+                elif rem_result.get("mode") == "AUTO":
+                    status = rem_result.get("status", "")
+                    if rem_result.get("success"):
+                        st.success(f"✅ **AUTO-EXECUTED** — `{rec}` | Status: **{status}**")
+                        st.caption(rem_result.get("details", ""))
+                    else:
+                        st.warning(f"⚠️ **EXECUTED with issues** | Status: **{status}**")
+                        if rem_result.get("rollback"):
+                            st.info(f"↩️ Rollback: {rem_result['rollback'].get('status')}")
+                else:
+                    st.warning(
+                        f"🔒 **MANUAL APPROVAL REQUIRED** — `{rec}`\n\n"
+                        f"Approval ID: `{rem_result.get('approval_id', '?')}`\n"
+                        "Go to **Pending Approvals** panel below to approve or reject."
+                    )
+            else:
+                st.error(f"Diagnosis failed: {result.get('error') if result else 'No response'}")
     else:
         st.markdown("""
         <div style='text-align:center; padding: 60px 20px; color: #666;'>
@@ -358,3 +468,177 @@ if "live_results" in st.session_state:
 
                 with st.expander("📚 RAG Context"):
                     st.caption(item.get("rag_context", "—"))
+
+
+# ─────────────────────────────────────────────────────────────
+# Phase C Week 4 — NEW ENTERPRISE AIOPS PANELS
+# ─────────────────────────────────────────────────────────────
+
+st.divider()
+st.markdown("## 🏭 Autonomous Operations Hub")
+st.caption("Policy Engine → Execution Engine → Rollback Manager → Audit Logger")
+
+panel1, panel2, panel3 = st.columns(3)
+
+# ── Panel 1: Quick stats ──────────────────────────────────────────────────────
+with panel1:
+    st.markdown("### 📅 Active Incidents")
+    incidents_data = get_incidents()
+    incidents      = incidents_data.get("incidents", [])
+    if not incidents:
+        st.caption("✓ No active incidents")
+    else:
+        for inc in incidents[:4]:
+            sev   = inc.get("severity", "UNKNOWN")
+            icon  = SEVERITY_COLORS.get(sev, "⚪")
+            resolved = "✅" if inc.get("resolved") else "🔴"
+            st.markdown(
+                f"{resolved} {icon} **{inc.get('issue','?')}**\n\n"
+                f"&nbsp;&nbsp;&nbsp;&nbsp;`{inc.get('sensor','?')}` — {sev}\n\n"
+                f"&nbsp;&nbsp;&nbsp;&nbsp;💻 `{inc.get('action','?')}`"
+            )
+            st.caption(f"Detected: {str(inc.get('detected_at',''))[:19].replace('T',' ')}")
+            st.markdown("---")
+
+with panel2:
+    st.markdown("### ⚡ Executed Actions")
+    audit_data = get_audit_log()
+    entries    = [e for e in audit_data.get("entries", []) if e.get("status") == "SUCCESS"]
+    if not entries:
+        st.caption("No executed actions yet")
+    else:
+        for entry in entries[:4]:
+            ts = str(entry.get("timestamp",""))[:19].replace("T"," ")
+            st.markdown(
+                f"✅ **{entry.get('action','?')}**\n\n"
+                f"&nbsp;&nbsp;&nbsp;&nbsp;📌 `{entry.get('sensor','?')}` | {entry.get('issue','?')}"
+            )
+            st.caption(f"{ts} · {entry.get('policy','?')} · {entry.get('executed_by','?')}")
+            st.markdown("---")
+
+with panel3:
+    st.markdown("### 🔒 Pending Approvals")
+    approvals_data = get_approvals()
+    pending = [r for r in approvals_data.get("requests", []) if r.get("status") == "PENDING"]
+    if not pending:
+        st.success("✓ No actions awaiting approval")
+    else:
+        st.warning(f"⏳ {len(pending)} action(s) waiting for approval")
+        for req in pending:
+            st.markdown(
+                f"🔒 **{req.get('action','?')}**\n\n"
+                f"&nbsp;&nbsp;&nbsp;&nbsp;📌 `{req.get('sensor','?')}` | {req.get('issue','?')} | {req.get('severity','?')}"
+            )
+            ts = str(req.get("requested_at",""))[:19].replace("T"," ")
+            st.caption(f"Requested: {ts}")
+            req_id = req.get("id","")
+            col_a, col_r = st.columns(2)
+            if col_a.button("✅ Approve", key=f"approve_{req_id}", use_container_width=True):
+                with st.spinner("Approving and executing..."):
+                    res = approve_action(req_id)
+                if "error" in res:
+                    st.error(res["error"])
+                else:
+                    st.success(f"Executed! Status: {res.get('status','?')}")
+                    st.rerun()
+            if col_r.button("❌ Reject",  key=f"reject_{req_id}",  use_container_width=True):
+                res = reject_action(req_id)
+                if "error" in res:
+                    st.error(res["error"])
+                else:
+                    st.info("Action rejected.")
+                    st.rerun()
+            st.markdown("---")
+
+
+# ── Audit Log panel ────────────────────────────────────────────────────────────
+
+st.divider()
+st.subheader("📓 Audit Log")
+st.caption("Every autonomous action — who, what, when, why, outcome")
+
+audit_data = get_audit_log()
+entries    = audit_data.get("entries", [])
+stats      = audit_data.get("stats", {})
+
+if stats:
+    sa, sb, sc, sd = st.columns(4)
+    sa.metric("✅ Success",   stats.get("SUCCESS", 0))
+    sb.metric("❌ Failed",    stats.get("FAILED", 0))
+    sc.metric("⏳ Pending",   stats.get("PENDING", 0))
+    sd.metric("❌ Rejected",  stats.get("REJECTED", 0))
+
+if not entries:
+    st.caption("Audit log is empty. Run Auto-Remediate to create entries.")
+else:
+    STATUS_ICON = {
+        "SUCCESS"        : "✅",
+        "FAILED"         : "❌",
+        "ROLLED_BACK"    : "↩️",
+        "ROLLBACK_FAILED": "🚨",
+        "NO_ROLLBACK"    : "⚠️",
+        "PENDING"        : "⏳",
+        "REJECTED"       : "🚫",
+    }
+    import pandas as pd
+    df_rows = []
+    for e in entries:
+        ts = str(e.get("timestamp",""))[:19].replace("T"," ")
+        df_rows.append({
+            "Time"       : ts,
+            "Status"     : STATUS_ICON.get(e.get("status",""),"") + " " + e.get("status",""),
+            "Action"     : e.get("action",""),
+            "Issue"      : e.get("issue",""),
+            "Sensor"     : e.get("sensor",""),
+            "Policy"     : e.get("policy",""),
+            "By"         : e.get("executed_by",""),
+            "ms"         : round(e.get("duration_ms",0), 1),
+        })
+    st.dataframe(pd.DataFrame(df_rows), use_container_width=True, hide_index=True)
+
+
+# ── Incident Timeline panel ─────────────────────────────────────────────────────
+
+st.divider()
+st.subheader("📅 Incident Timeline")
+st.caption("Full lifecycle: Detected → Diagnosed → Executed → Resolved")
+
+inc_data  = get_incidents()
+incidents = inc_data.get("incidents", [])
+
+if not incidents:
+    st.caption("No incidents recorded yet. Run Auto-Remediate to create incidents.")
+else:
+    for inc in incidents[:5]:
+        sev     = inc.get("severity", "UNKNOWN")
+        icon    = SEVERITY_COLORS.get(sev, "⚪")
+        resolved = inc.get("resolved", False)
+        status_badge = "🟢 RESOLVED" if resolved else "🔴 OPEN"
+        policy  = inc.get("policy", "")
+        policy_badge = "🤖 AUTO" if policy == "AUTO" else "🔒 MANUAL"
+
+        with st.expander(
+            f"{icon} **{inc.get('issue','?')}** — `{inc.get('action','?')}` · {status_badge} · {policy_badge}",
+            expanded=False,
+        ):
+            # Timeline steps
+            steps = []
+            if inc.get("detected_at"):
+                steps.append(("🔍 Detected",  inc["detected_at"]))
+            if inc.get("approved_at"):
+                steps.append(("✅ Approved",  inc["approved_at"]))
+            if inc.get("executed_at"):
+                steps.append(("⚡ Executed",  inc["executed_at"]))
+            if inc.get("resolved_at"):
+                steps.append(("🟢 Resolved",  inc["resolved_at"]))
+
+            for step_label, step_ts in steps:
+                ts_str = str(step_ts)[:19].replace("T"," ")
+                st.markdown(f"**{step_label}** &nbsp; `{ts_str}`")
+
+            if inc.get("execution"):
+                ex = inc["execution"]
+                st.markdown(f"📓 **Result:** {ex.get('status','?')} — {ex.get('details','')[:120]}")
+                if ex.get("rollback"):
+                    rb = ex["rollback"]
+                    st.info(f"↩️ Rollback: {rb.get('status','?')} — {rb.get('details','')[:100]}")

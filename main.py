@@ -87,17 +87,25 @@ Endpoints:
 
 import json
 import time
+import uuid
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Optional
 
 from rag_engine import build_index, _get_collection
 from parser import extract_all_events
 from agent import diagnose
+
+# ── Phase C Week 4: Automation pipeline ───────────────────────────────────────
+from automation.policy_engine    import evaluate_policy, ApprovalMode
+from automation.approval_manager import ApprovalManager, ApprovalStatus
+from automation.execution_engine import ExecutionEngine
+from automation.audit_logger     import AuditLogger
 
 
 # ── Pydantic models (request / response shapes) ────────────────────────────────
@@ -112,6 +120,21 @@ class EventInput(BaseModel):
 class ScenarioRequest(BaseModel):
     """Input for POST /diagnose/scenario"""
     name: str                            # e.g. "dimm_failure"
+
+
+class RemediateRequest(BaseModel):
+    """Input for POST /remediate — wraps a diagnosis result"""
+    issue        : str
+    action       : str               # recommendation from diagnosis
+    sensor       : str  = "UNKNOWN"
+    severity     : str  = "UNKNOWN"
+    executed_by  : str  = "auto"     # override to record human initiator
+
+
+class ApprovalActionRequest(BaseModel):
+    """Input for POST /approvals/{id}/approve or /reject"""
+    resolved_by : str  = "ops-engineer"
+    notes       : str  = ""
 
 
 class DiagnosisResponse(BaseModel):
@@ -175,15 +198,45 @@ def _save_results(results: list) -> None:
 
 # ── Lifespan: startup tasks (build index once when server starts) ──────────────
 
+# ── Incident Store ─────────────────────────────────────────────────────────────
+# Tracks the full lifecycle of each incident (detected → diagnosed → executed → resolved)
+
+INCIDENTS_PATH = Path("./incidents.json")
+
+def _load_incidents() -> list:
+    if INCIDENTS_PATH.exists():
+        with open(INCIDENTS_PATH) as f:
+            return json.load(f)
+    return []
+
+def _save_incidents(incidents: list) -> None:
+    with open(INCIDENTS_PATH, "w") as f:
+        json.dump(incidents, f, indent=2)
+
+
+# ── Singletons for automation pipeline ────────────────────────────────────────
+# Shared across all requests — initialised once on startup
+_approval_manager : ApprovalManager | None = None
+_execution_engine : ExecutionEngine | None = None
+_audit_logger     : AuditLogger     | None = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Runs on startup — builds RAG index if not already built."""
-    print("[Main] Starting AI OpsBMC service...")
+    """Runs on startup — builds RAG index and initialises automation singletons."""
+    global _approval_manager, _execution_engine, _audit_logger
+    print("[Main] Starting AI OpsBMC Autonomous Operations service...")
     try:
         build_index()           # skips if already built
         print("[Main] RAG index ready.")
     except Exception as e:
         print(f"[Main] WARNING: Could not build index: {e}")
+
+    # Initialise automation pipeline components
+    _approval_manager = ApprovalManager()
+    _execution_engine = ExecutionEngine()
+    _audit_logger     = AuditLogger()
+    print("[Main] Automation pipeline ready (Policy → Approve → Execute → Audit).")
     yield
     print("[Main] Shutting down.")
 
@@ -445,6 +498,222 @@ def diagnose_live():
         "events_found": len(results),
         "results"     : results,
     }
+# ── Phase C Week 4: Autonomous Remediation Endpoints ─────────────────────────
+
+@app.post("/remediate", tags=["Remediation"])
+def remediate(req: RemediateRequest):
+    """
+    Feed a diagnosis recommendation into the full automation pipeline:
+
+        Policy Engine → AUTO? Execute immediately
+                      → MANUAL? Create approval request and wait
+
+    Returns the execution result (AUTO) or the pending approval (MANUAL).
+    """
+    policy = evaluate_policy(req.action)
+
+    if policy == ApprovalMode.AUTO:
+        # Execute immediately — no human needed
+        result = _execution_engine.execute(
+            action      = req.action,
+            issue       = req.issue,
+            sensor      = req.sensor,
+            severity    = req.severity,
+            policy      = policy.value,
+            executed_by = req.executed_by,
+        )
+
+        # Record in incident store
+        incidents = _load_incidents()
+        incident_id = str(uuid.uuid4())
+        incidents.append({
+            "id"           : incident_id,
+            "issue"        : req.issue,
+            "sensor"       : req.sensor,
+            "severity"     : req.severity,
+            "action"       : req.action,
+            "policy"       : policy.value,
+            "execution"    : result,
+            "detected_at"  : result["timestamp"],
+            "executed_at"  : result["timestamp"],
+            "resolved"     : result["success"],
+            "resolved_at"  : result["timestamp"] if result["success"] else None,
+        })
+        _save_incidents(incidents)
+
+        return {
+            "mode"        : "AUTO",
+            "incident_id" : incident_id,
+            "action"      : req.action,
+            "status"      : result["status"],
+            "success"     : result["success"],
+            "details"     : result["details"],
+            "audit_id"    : result.get("audit_id"),
+            "rollback"    : result.get("rollback"),
+            "timestamp"   : result["timestamp"],
+        }
+
+    else:
+        # MANUAL — create approval request
+        approval = _approval_manager.request_approval(
+            issue    = req.issue,
+            action   = req.action,
+            sensor   = req.sensor,
+            severity = req.severity,
+            policy   = policy.value,
+        )
+        # Log the pending action in audit log
+        _audit_logger.log(
+            issue       = req.issue,
+            action      = req.action,
+            status      = "PENDING",
+            executed_by = req.executed_by,
+            policy      = policy.value,
+            sensor      = req.sensor,
+            severity    = req.severity,
+            details     = f"Approval request created: {approval.id}",
+        )
+        return {
+            "mode"          : "MANUAL",
+            "approval_id"   : approval.id,
+            "action"        : req.action,
+            "status"        : "PENDING",
+            "message"       : "Action requires human approval. Use POST /approvals/{id}/approve.",
+            "requested_at"  : approval.requested_at,
+        }
+
+
+@app.get("/approvals", tags=["Remediation"])
+def list_approvals(pending_only: bool = False):
+    """
+    List all approval requests (MANUAL-policy actions waiting for human sign-off).
+    Set ?pending_only=true to show only unresolved requests.
+    """
+    requests = (
+        _approval_manager.list_pending()
+        if pending_only
+        else _approval_manager.list_all(limit=50)
+    )
+    return {
+        "total"    : len(requests),
+        "requests" : [r.to_dict() for r in requests],
+        "stats"    : _approval_manager.stats(),
+    }
+
+
+@app.post("/approvals/{request_id}/approve", tags=["Remediation"])
+def approve_action(request_id: str, body: ApprovalActionRequest):
+    """
+    Human approves a MANUAL action — triggers immediate execution.
+    """
+    try:
+        approval = _approval_manager.approve(request_id, approved_by=body.resolved_by)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Approval request '{request_id}' not found.")
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+    # Now execute
+    result = _execution_engine.execute(
+        action      = approval.action,
+        issue       = approval.issue,
+        sensor      = approval.sensor,
+        severity    = approval.severity,
+        policy      = approval.policy,
+        executed_by = body.resolved_by,
+    )
+
+    # Record incident
+    incidents = _load_incidents()
+    incident_id = str(uuid.uuid4())
+    incidents.append({
+        "id"           : incident_id,
+        "issue"        : approval.issue,
+        "sensor"       : approval.sensor,
+        "severity"     : approval.severity,
+        "action"       : approval.action,
+        "policy"       : "MANUAL",
+        "approval_id"  : approval.id,
+        "execution"    : result,
+        "detected_at"  : approval.requested_at,
+        "approved_at"  : approval.resolved_at,
+        "executed_at"  : result["timestamp"],
+        "resolved"     : result["success"],
+        "resolved_at"  : result["timestamp"] if result["success"] else None,
+    })
+    _save_incidents(incidents)
+
+    return {
+        "approval_id" : request_id,
+        "incident_id" : incident_id,
+        "action"      : approval.action,
+        "status"      : result["status"],
+        "success"     : result["success"],
+        "details"     : result["details"],
+        "audit_id"    : result.get("audit_id"),
+    }
+
+
+@app.post("/approvals/{request_id}/reject", tags=["Remediation"])
+def reject_action(request_id: str, body: ApprovalActionRequest):
+    """Human rejects a MANUAL action — it will NOT be executed."""
+    try:
+        approval = _approval_manager.reject(
+            request_id,
+            rejected_by = body.resolved_by,
+            reason      = body.notes,
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Approval request '{request_id}' not found.")
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+    _audit_logger.log(
+        issue       = approval.issue,
+        action      = approval.action,
+        status      = "REJECTED",
+        executed_by = body.resolved_by,
+        policy      = approval.policy,
+        sensor      = approval.sensor,
+        severity    = approval.severity,
+        details     = f"Rejected by {body.resolved_by}. Reason: {body.notes}",
+    )
+    return {
+        "approval_id" : request_id,
+        "action"      : approval.action,
+        "status"      : "REJECTED",
+        "resolved_by" : body.resolved_by,
+    }
+
+
+@app.get("/audit", tags=["Governance"])
+def get_audit_log(limit: int = 50):
+    """
+    Return the most recent `limit` entries from the audit log.
+    Shows every autonomous action the system has taken or attempted.
+    """
+    entries = _audit_logger.get_log(limit=limit)
+    return {
+        "total"   : _audit_logger.count(),
+        "limit"   : limit,
+        "entries" : entries,
+        "stats"   : _audit_logger.stats(),
+    }
+
+
+@app.get("/incidents", tags=["Governance"])
+def get_incidents(limit: int = 20):
+    """
+    Return the full incident timeline:
+    detected_at → approved_at → executed_at → resolved_at
+    """
+    incidents = _load_incidents()
+    return {
+        "total"    : len(incidents),
+        "incidents": incidents[-limit:][::-1],   # newest first
+    }
+
+
 # ── Dev runner ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

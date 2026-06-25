@@ -350,6 +350,48 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_diagnoses_sensor_timestamp
             ON diagnoses (sensor, timestamp);
         """)
+
+        # ── Phase C Week 4: Audit Log ───────────────────────────────────────
+        # Every autonomous action (and its outcome) is written here for
+        # compliance, debugging, and incident post-mortems.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp   TEXT    NOT NULL,
+                issue       TEXT    NOT NULL,
+                sensor      TEXT    NOT NULL DEFAULT 'UNKNOWN',
+                action      TEXT    NOT NULL,
+                executed_by TEXT    NOT NULL DEFAULT 'system',
+                policy      TEXT    NOT NULL DEFAULT 'AUTO',
+                status      TEXT    NOT NULL,
+                severity    TEXT    NOT NULL DEFAULT 'UNKNOWN',
+                details     TEXT,
+                duration_ms REAL    DEFAULT 0
+            );
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_audit_timestamp
+            ON audit_log (timestamp);
+        """)
+
+        # ── Phase C Week 4: Approval Requests ──────────────────────────────
+        # MANUAL-policy actions create a row here and wait for human action.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS approval_requests (
+                id           TEXT    PRIMARY KEY,
+                issue        TEXT    NOT NULL,
+                action       TEXT    NOT NULL,
+                sensor       TEXT    NOT NULL,
+                severity     TEXT    NOT NULL,
+                policy       TEXT    NOT NULL,
+                status       TEXT    NOT NULL DEFAULT 'PENDING',
+                requested_at TEXT    NOT NULL,
+                resolved_at  TEXT,
+                resolved_by  TEXT,
+                notes        TEXT    DEFAULT ''
+            );
+        """)
+
     print(f"[DB] Initialised at {DB_PATH}")
 
 
