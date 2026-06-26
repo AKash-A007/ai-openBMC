@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiops-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aiops-dashboard
+  template:
+    metadata:
+      labels:
+        app: aiops-dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: aiops-dashboard:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8501
+          envFrom:
+            - configMapRef:
+                name: aiops-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiops-dashboard-service
+spec:
+  selector:
+    app: aiops-dashboard
+  ports:
+    - port: 8501
+      targetPort: 8501
+  type: ClusterIP

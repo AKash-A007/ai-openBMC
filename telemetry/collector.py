@@ -14,7 +14,7 @@ import random
 import time
 from datetime import datetime, timezone
 
-from database import init_db, insert_reading
+from database import init_db, insert_readings_batch
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -92,8 +92,8 @@ def _determine_status(sensor_name: str, value: float) -> str:
 
 def collect_once() -> list[dict]:
     """
-    Collect one reading per sensor, insert into SQLite, and return
-    the readings collected (useful for logging or FastAPI responses).
+    Collect one reading per sensor, insert into database, and return
+    the readings collected.
     """
     timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
     readings = []
@@ -102,13 +102,6 @@ def collect_once() -> list[dict]:
         value  = _generate_value(sensor_name)
         status = _determine_status(sensor_name, value)
 
-        insert_reading(
-            timestamp=timestamp,
-            sensor=sensor_name,
-            value=value,
-            status=status,
-        )
-
         readings.append({
             "timestamp": timestamp,
             "sensor"   : sensor_name,
@@ -116,6 +109,7 @@ def collect_once() -> list[dict]:
             "status"   : status,
         })
 
+    insert_readings_batch(readings)
     return readings
 
 

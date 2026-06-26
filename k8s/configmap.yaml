@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aiops-config
+data:
+  DB_TYPE: "postgres"
+  DB_HOST: "aiops-postgres-service"
+  DB_PORT: "5432"
+  DB_NAME: "telemetry"
+  DB_USER: "postgres"
+  POLL_INTERVAL: "5"
+  AGENT_SERVICE_URL: "http://aiops-agent-service:8000"
+  ANALYTICS_SERVICE_URL: "http://aiops-analytics-service:8001"

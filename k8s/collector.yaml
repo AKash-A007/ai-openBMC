@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiops-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aiops-collector
+  template:
+    metadata:
+      labels:
+        app: aiops-collector
+    spec:
+      containers:
+        - name: collector
+          image: aiops-collector:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: aiops-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: aiops-secrets
+                  key: db-password

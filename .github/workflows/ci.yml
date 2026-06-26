@@ -1,0 +1,58 @@
+name: AIOps Platform CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # Install test client dependency
+          pip install httpx
+
+      - name: Run Linting (Black)
+        run: black --check .
+
+      - name: Run Style Checks (Flake8)
+        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Run Type Checking (Mypy)
+        run: mypy --ignore-missing-imports services/agent/main.py services/analytics/main.py
+
+      - name: Run Test Suite with Coverage
+        run: |
+          pytest --cov=. --cov-report=term-missing
+
+  docker-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Verify Collector Service Docker Build
+        run: docker build -t aiops-collector -f services/collector/Dockerfile .
+
+      - name: Verify Analytics Service Docker Build
+        run: docker build -t aiops-analytics -f services/analytics/Dockerfile .
+
+      - name: Verify Agent Service Docker Build
+        run: docker build -t aiops-agent -f services/agent/Dockerfile .
+
+      - name: Verify Dashboard Service Docker Build
+        run: docker build -t aiops-dashboard -f services/dashboard/Dockerfile .

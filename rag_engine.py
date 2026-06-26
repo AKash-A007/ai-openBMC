@@ -145,6 +145,8 @@ def _best_sentence(query: str, chunk: str) -> str:
 # but do not have exact word matches will be ranked higher than sentences that have exact word matches 
 #  are not semantically similar.
 
+_rag_cache = {}
+
 def rag_query(query: str, n_chunks: int = 1) -> str:
     """
     Main RAG entry point.
@@ -161,13 +163,20 @@ def rag_query(query: str, n_chunks: int = 1) -> str:
         >>> rag_query("Memory ECC error")
         'Repeated ECC errors often indicate DIMM degradation.'
     """
+    cache_key = (query, n_chunks)
+    if cache_key in _rag_cache:
+        return _rag_cache[cache_key]
+
     collection = _get_collection()
     if collection.count() == 0:
         raise RuntimeError("Index is empty. Run build_index() first.")
 
     results = collection.query(query_texts=[query], n_results=n_chunks)
     top_chunk = results["documents"][0][0]
-    return _best_sentence(query, top_chunk)
+    res = _best_sentence(query, top_chunk)
+    
+    _rag_cache[cache_key] = res
+    return res
 
 
 def search_knowledge_base(query: str, n_results: int = 1) -> dict:

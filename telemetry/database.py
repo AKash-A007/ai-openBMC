@@ -266,43 +266,163 @@ Why centralise SQL in one file?
 """
 
 import sqlite3
+import os
 from pathlib import Path
 from contextlib import contextmanager
 
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+except ImportError:
+    psycopg2 = None
+    RealDictCursor = None
+
 # ── Constants ───────────────────────────────────────────────────────────────
 
-# Anchor the db path to this file's location, not the current working
-# directory. Without this, running a script from analytics/ instead of
-# telemetry/ would silently create a SECOND, empty database at
-# analytics/db/telemetry.db — a real bug that's easy to hit the moment
-# another module (like anomaly_detector.py) imports this one.
 DB_DIR  = Path(__file__).resolve().parent.parent / "db"
 DB_PATH = DB_DIR / "telemetry.db"
+DB_TYPE = os.getenv("DB_TYPE", "sqlite").lower()
+
+
+# ── Compatible Interface for SQLite & PostgreSQL ─────────────────────────────
+
+class CompatibleRow:
+    def __init__(self, dict_row):
+        self._row = dict_row
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self._row.values())[key]
+        return self._row[key]
+
+    def keys(self):
+        return list(self._row.keys())
+
+    def get(self, key, default=None):
+        return self._row.get(key, default)
+
+    def items(self):
+        return self._row.items()
+
+    def __iter__(self):
+        return iter(self._row.items())
+
+
+class CompatibleCursor:
+    def __init__(self, cursor, is_postgres: bool):
+        self.cursor = cursor
+        self.is_postgres = is_postgres
+
+    def execute(self, sql, params=None):
+        if params is None:
+            params = ()
+        if self.is_postgres:
+            import re
+            sql = sql.replace("?", "%s")
+            sql = re.sub(r':(\w+)', r'%(\1)s', sql)
+        self.cursor.execute(sql, params)
+        return self
+
+    def executemany(self, sql, params_list):
+        if self.is_postgres:
+            import re
+            sql = sql.replace("?", "%s")
+            sql = re.sub(r':(\w+)', r'%(\1)s', sql)
+        self.cursor.executemany(sql, params_list)
+        return self
+
+    def fetchall(self):
+        rows = self.cursor.fetchall()
+        if self.is_postgres:
+            return [CompatibleRow(row) for row in rows]
+        return rows
+
+    def fetchone(self):
+        row = self.cursor.fetchone()
+        if row is not None and self.is_postgres:
+            return CompatibleRow(row)
+        return row
+
+    @property
+    def lastrowid(self):
+        if self.is_postgres:
+            # Get last auto-generated serial ID on this connection
+            self.cursor.execute("SELECT lastval();")
+            return self.cursor.fetchone()[0]
+        else:
+            return self.cursor.lastrowid
+
+
+class CompatibleConnection:
+    def __init__(self, conn, is_postgres: bool):
+        self.conn = conn
+        self.is_postgres = is_postgres
+
+    def cursor(self):
+        if self.is_postgres:
+            return CompatibleCursor(self.conn.cursor(cursor_factory=RealDictCursor), is_postgres=True)
+        return CompatibleCursor(self.conn.cursor(), is_postgres=False)
+
+    def execute(self, sql, params=None):
+        cursor = self.cursor()
+        cursor.execute(sql, params)
+        return cursor
+
+    def executemany(self, sql, params_list):
+        cursor = self.cursor()
+        cursor.executemany(sql, params_list)
+        return cursor
+
+    def commit(self):
+        self.conn.commit()
+
+    def rollback(self):
+        self.conn.rollback()
+
+    def close(self):
+        self.conn.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is not None:
+            self.rollback()
+        else:
+            self.commit()
+        self.close()
 
 
 # ── Connection management ──────────────────────────────────────────────────
 
-@contextmanager
 def get_connection():
     """
-    Context manager for SQLite connections.
-    Ensures connections are always closed, even if an error occurs.
-
+    Returns a unified connection wrapper for SQLite or PostgreSQL.
     Usage:
         with get_connection() as conn:
             conn.execute(...)
     """
-    DB_DIR.mkdir(exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row   # access columns by name, e.g. row["sensor"]
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    if DB_TYPE == "postgres":
+        if psycopg2 is None:
+            raise ImportError("psycopg2 is not installed but DB_TYPE=postgres was specified.")
+        host = os.getenv("DB_HOST", "localhost")
+        port = os.getenv("DB_PORT", "5432")
+        user = os.getenv("DB_USER", "postgres")
+        password = os.getenv("DB_PASSWORD", "postgres")
+        dbname = os.getenv("DB_NAME", "telemetry")
+        raw_conn = psycopg2.connect(
+            host=host,
+            port=port,
+            user=user,
+            password=password,
+            dbname=dbname
+        )
+        return CompatibleConnection(raw_conn, is_postgres=True)
+    else:
+        DB_DIR.mkdir(exist_ok=True)
+        raw_conn = sqlite3.connect(DB_PATH)
+        raw_conn.row_factory = sqlite3.Row
+        return CompatibleConnection(raw_conn, is_postgres=False)
 
 
 # ── Schema ──────────────────────────────────────────────────────────────────
@@ -310,89 +430,128 @@ def get_connection():
 def init_db() -> None:
     """
     Create the telemetry and diagnoses tables if they don't already exist.
-    Safe to call multiple times — CREATE TABLE IF NOT EXISTS is idempotent.
+    Safe to call multiple times.
     """
     with get_connection() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS telemetry (
-                id        INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT    NOT NULL,
-                sensor    TEXT    NOT NULL,
-                value     REAL    NOT NULL,
-                status    TEXT    NOT NULL
-            );
-        """)
-        # Index on sensor + timestamp speeds up history queries dramatically
-        # as the table grows (Phase B Week 2 will query this heavily)
+        if DB_TYPE == "postgres":
+            # PostgreSQL Schema
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS telemetry (
+                    id        SERIAL PRIMARY KEY,
+                    timestamp TEXT    NOT NULL,
+                    sensor    TEXT    NOT NULL,
+                    value     DOUBLE PRECISION NOT NULL,
+                    status    TEXT    NOT NULL
+                );
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS diagnoses (
+                    id         SERIAL PRIMARY KEY,
+                    timestamp  TEXT    NOT NULL,
+                    sensor     TEXT    NOT NULL,
+                    root_cause TEXT    NOT NULL,
+                    confidence DOUBLE PRECISION NOT NULL
+                );
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS audit_log (
+                    id          SERIAL PRIMARY KEY,
+                    timestamp   TEXT    NOT NULL,
+                    issue       TEXT    NOT NULL,
+                    sensor      TEXT    NOT NULL DEFAULT 'UNKNOWN',
+                    action      TEXT    NOT NULL,
+                    executed_by TEXT    NOT NULL DEFAULT 'system',
+                    policy      TEXT    NOT NULL DEFAULT 'AUTO',
+                    status      TEXT    NOT NULL,
+                    severity    TEXT    NOT NULL DEFAULT 'UNKNOWN',
+                    details     TEXT,
+                    duration_ms DOUBLE PRECISION DEFAULT 0
+                );
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS approval_requests (
+                    id           TEXT    PRIMARY KEY,
+                    issue        TEXT    NOT NULL,
+                    action       TEXT    NOT NULL,
+                    sensor       TEXT    NOT NULL,
+                    severity     TEXT    NOT NULL,
+                    policy       TEXT    NOT NULL,
+                    status       TEXT    NOT NULL DEFAULT 'PENDING',
+                    requested_at TEXT    NOT NULL,
+                    resolved_at  TEXT,
+                    resolved_by  TEXT,
+                    notes        TEXT    DEFAULT ''
+                );
+            """)
+        else:
+            # SQLite Schema
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS telemetry (
+                    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT    NOT NULL,
+                    sensor    TEXT    NOT NULL,
+                    value     REAL    NOT NULL,
+                    status    TEXT    NOT NULL
+                );
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS diagnoses (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp  TEXT    NOT NULL,
+                    sensor     TEXT    NOT NULL,
+                    root_cause TEXT    NOT NULL,
+                    confidence REAL    NOT NULL
+                );
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS audit_log (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp   TEXT    NOT NULL,
+                    issue       TEXT    NOT NULL,
+                    sensor      TEXT    NOT NULL DEFAULT 'UNKNOWN',
+                    action      TEXT    NOT NULL,
+                    executed_by TEXT    NOT NULL DEFAULT 'system',
+                    policy      TEXT    NOT NULL DEFAULT 'AUTO',
+                    status      TEXT    NOT NULL,
+                    severity    TEXT    NOT NULL DEFAULT 'UNKNOWN',
+                    details     TEXT,
+                    duration_ms REAL    DEFAULT 0
+                );
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS approval_requests (
+                    id           TEXT    PRIMARY KEY,
+                    issue        TEXT    NOT NULL,
+                    action       TEXT    NOT NULL,
+                    sensor       TEXT    NOT NULL,
+                    severity     TEXT    NOT NULL,
+                    policy       TEXT    NOT NULL,
+                    status       TEXT    NOT NULL DEFAULT 'PENDING',
+                    requested_at TEXT    NOT NULL,
+                    resolved_at  TEXT,
+                    resolved_by  TEXT,
+                    notes        TEXT    DEFAULT ''
+                );
+            """)
+
+        # Indexes are the same for both DBs
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_sensor_timestamp
             ON telemetry (sensor, timestamp);
         """)
-
-        # ── Week 4: RCA history ─────────────────────────────────────────────
-        # Stores every diagnosis the system has produced (Phase A's
-        # diagnosis agent, or the rule-based predictor) so operators can
-        # review "what has this system told us in the past," spot recurring
-        # failure patterns, and audit the AI's reasoning over time. Without
-        # this table, every diagnosis is forgotten the moment it's printed —
-        # exactly the same problem telemetry storage solved for raw sensor
-        # values in Week 1, now applied to diagnostic conclusions.
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS diagnoses (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp  TEXT    NOT NULL,
-                sensor     TEXT    NOT NULL,
-                root_cause TEXT    NOT NULL,
-                confidence REAL    NOT NULL
-            );
-        """)
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_diagnoses_sensor_timestamp
             ON diagnoses (sensor, timestamp);
-        """)
-
-        # ── Phase C Week 4: Audit Log ───────────────────────────────────────
-        # Every autonomous action (and its outcome) is written here for
-        # compliance, debugging, and incident post-mortems.
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS audit_log (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp   TEXT    NOT NULL,
-                issue       TEXT    NOT NULL,
-                sensor      TEXT    NOT NULL DEFAULT 'UNKNOWN',
-                action      TEXT    NOT NULL,
-                executed_by TEXT    NOT NULL DEFAULT 'system',
-                policy      TEXT    NOT NULL DEFAULT 'AUTO',
-                status      TEXT    NOT NULL,
-                severity    TEXT    NOT NULL DEFAULT 'UNKNOWN',
-                details     TEXT,
-                duration_ms REAL    DEFAULT 0
-            );
         """)
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_audit_timestamp
             ON audit_log (timestamp);
         """)
 
-        # ── Phase C Week 4: Approval Requests ──────────────────────────────
-        # MANUAL-policy actions create a row here and wait for human action.
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS approval_requests (
-                id           TEXT    PRIMARY KEY,
-                issue        TEXT    NOT NULL,
-                action       TEXT    NOT NULL,
-                sensor       TEXT    NOT NULL,
-                severity     TEXT    NOT NULL,
-                policy       TEXT    NOT NULL,
-                status       TEXT    NOT NULL DEFAULT 'PENDING',
-                requested_at TEXT    NOT NULL,
-                resolved_at  TEXT,
-                resolved_by  TEXT,
-                notes        TEXT    DEFAULT ''
-            );
-        """)
-
-    print(f"[DB] Initialised at {DB_PATH}")
+    if DB_TYPE == "postgres":
+        print(f"[DB] Initialised PostgreSQL database")
+    else:
+        print(f"[DB] Initialised SQLite at {DB_PATH}")
 
 
 # ── Diagnoses table operations ────────────────────────────────────────────────

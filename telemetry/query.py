@@ -15,6 +15,11 @@ from database import fetch_by_sensor, fetch_all, count_rows
 
 # ── Core history functions ────────────────────────────────────────────────────
 
+import time
+
+_query_cache = {}
+CACHE_TTL_SECONDS = 2.0
+
 def get_sensor_history(sensor: str, limit: int = 100) -> list[float]:
     """
     Return just the numeric values for a sensor, oldest → newest.
@@ -25,8 +30,17 @@ def get_sensor_history(sensor: str, limit: int = 100) -> list[float]:
         >>> get_sensor_history("CPU_TEMP")
         [71.0, 73.0, 74.0, 77.0, 80.0]
     """
+    current_time = time.time()
+    cache_key = (sensor, limit, "raw")
+    if cache_key in _query_cache:
+        val, ts = _query_cache[cache_key]
+        if current_time - ts < CACHE_TTL_SECONDS:
+            return val
+
     rows = fetch_by_sensor(sensor, limit=limit)
-    return [row["value"] for row in rows]
+    res = [row["value"] for row in rows]
+    _query_cache[cache_key] = (res, current_time)
+    return res
 
 
 def get_sensor_history_full(sensor: str, limit: int = 100) -> list[dict]:
@@ -43,8 +57,15 @@ def get_sensor_history_full(sensor: str, limit: int = 100) -> list[dict]:
           {"timestamp": "2026-06-17T15:30:10+00:00", "sensor": "CPU_TEMP", "value": 77.0, "status": "WARNING"},
         ]
     """
+    current_time = time.time()
+    cache_key = (sensor, limit, "full")
+    if cache_key in _query_cache:
+        val, ts = _query_cache[cache_key]
+        if current_time - ts < CACHE_TTL_SECONDS:
+            return val
+
     rows = fetch_by_sensor(sensor, limit=limit)
-    return [
+    res = [
         {
             "timestamp": row["timestamp"],
             "sensor"   : row["sensor"],
@@ -53,6 +74,8 @@ def get_sensor_history_full(sensor: str, limit: int = 100) -> list[dict]:
         }
         for row in rows
     ]
+    _query_cache[cache_key] = (res, current_time)
+    return res
 
 
 def get_latest_reading(sensor: str) -> dict | None:

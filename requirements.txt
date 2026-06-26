@@ -153,3 +153,9 @@ websockets==15.0.1
 xxhash==3.7.0
 yarl==1.24.2
 zstandard==0.25.0
+pytest==8.1.1
+pytest-cov==4.1.0
+black==24.3.0
+flake8==7.0.0
+mypy==1.9.0
+types-requests==2.31.0.20240406
