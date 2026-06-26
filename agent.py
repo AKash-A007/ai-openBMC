@@ -1,10 +1,9 @@
-
-#prompt template
+# prompt template
 """
-    Using a combination of RAG prompt,instruction prompt,structured prompt,
-    and role based prompt.
-    also following a low temperature decoding   
-    system prommpt is also included in  this  
+Using a combination of RAG prompt,instruction prompt,structured prompt,
+and role based prompt.
+also following a low temperature decoding
+system prommpt is also included in  this
 """
 
 # log = parse_log("system.json")
@@ -20,13 +19,15 @@ from parser import parse_log
 # ── HuggingFace client (free, needs HF_TOKEN env var) ─────────────────────────
 _client = None
 
+
 def _get_client():
     global _client
     if _client is None:
         import os
+
         _client = InferenceClient(
-            provider="auto",                    # picks fastest free provider
-            api_key=os.environ["HF_TOKEN"]      # free token from hf.co/settings/tokens
+            provider="auto",  # picks fastest free provider
+            api_key=os.environ["HF_TOKEN"],  # free token from hf.co/settings/tokens
         )
     return _client
 
@@ -62,7 +63,7 @@ def diagnose(log: dict) -> dict:
 
     rag_query_str = f"{parsed_event['category']} {parsed_event['event_type']}"
     context = rag_query(rag_query_str, n_chunks=2)
-    prompt  = _build_prompt(parsed_event, context)
+    prompt = _build_prompt(parsed_event, context)
 
     client = _get_client()
 
@@ -73,15 +74,12 @@ def diagnose(log: dict) -> dict:
             {
                 "role": "system",
                 "content": "You are an OpenBMC diagnostics expert. Always respond with valid JSON only."
-                " /no_think"
+                " /no_think",
             },
-            {
-                "role": "user",
-                "content": prompt
-            }
+            {"role": "user", "content": prompt},
         ],
         max_tokens=512,
-        temperature=0.1,        # low temp = consistent structured output
+        temperature=0.1,  # low temp = consistent structured output
     )
 
     raw_text = response.choices[0].message.content.strip()
@@ -93,8 +91,8 @@ def diagnose(log: dict) -> dict:
             raw_text = raw_text[4:]
 
     diagnosis = json.loads(raw_text.strip())
-    diagnosis["sensor"]      = parsed_event["sensor"]
-    diagnosis["event_type"]  = parsed_event["event_type"]
+    diagnosis["sensor"] = parsed_event["sensor"]
+    diagnosis["event_type"] = parsed_event["event_type"]
     diagnosis["rag_context"] = context
     return diagnosis
 
@@ -103,9 +101,9 @@ if __name__ == "__main__":
     build_index()
 
     sample_log = {
-        "sensor"  : "DIMM_B2",
-        "event"   : "Memory ECC Error",
-        "severity": "WARNING"
+        "sensor": "DIMM_B2",
+        "event": "Memory ECC Error",
+        "severity": "WARNING",
     }
 
     result = diagnose(sample_log)

@@ -12,6 +12,7 @@ os.environ["DB_PATH"] = "db/test_telemetry.db"
 
 from telemetry.database import init_db
 
+
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_db():
     init_db()

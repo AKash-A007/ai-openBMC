@@ -33,21 +33,22 @@ from datetime import datetime, timezone
 
 # ── Result shape ─────────────────────────────────────────────────────────────
 
+
 def _make_result(
-    action     : str,
-    success    : bool,
-    details    : str,
-    context    : dict,
+    action: str,
+    success: bool,
+    details: str,
+    context: dict,
     duration_ms: float,
 ) -> dict:
     return {
-        "action"     : action,
-        "success"    : success,
-        "status"     : "SUCCESS" if success else "FAILED",
-        "details"    : details,
-        "sensor"     : context.get("sensor", "UNKNOWN"),
-        "issue"      : context.get("issue",  "UNKNOWN"),
-        "timestamp"  : datetime.now(timezone.utc).isoformat(),
+        "action": action,
+        "success": success,
+        "status": "SUCCESS" if success else "FAILED",
+        "details": details,
+        "sensor": context.get("sensor", "UNKNOWN"),
+        "issue": context.get("issue", "UNKNOWN"),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "duration_ms": round(duration_ms, 2),
     }
 
@@ -59,14 +60,16 @@ def _simulate(action_name: str, context: dict, delay: float = 0.1) -> dict:
     (5%) to let the rollback machinery be exercised.
     """
     start = time.time()
-    print(f"[ActionExecutor] Executing: {action_name} | "
-          f"sensor={context.get('sensor')} | issue={context.get('issue')}")
+    print(
+        f"[ActionExecutor] Executing: {action_name} | "
+        f"sensor={context.get('sensor')} | issue={context.get('issue')}"
+    )
 
     time.sleep(delay)  # simulate real I/O latency
 
     # 5% random failure rate so we can demo rollback
     force_fail = context.get("_force_fail", False)
-    failed     = force_fail or (random.random() < 0.05)
+    failed = force_fail or (random.random() < 0.05)
 
     elapsed = (time.time() - start) * 1000
 
@@ -89,6 +92,7 @@ def _simulate(action_name: str, context: dict, delay: float = 0.1) -> dict:
 
 # ── Fan / thermal actions ─────────────────────────────────────────────────────
 
+
 def increase_fan_speed(context: dict) -> dict:
     """
     Increase fan speed to maximum to cool an overheating component.
@@ -107,6 +111,7 @@ def reduce_fan_speed(context: dict) -> dict:
 
 # ── Service actions ───────────────────────────────────────────────────────────
 
+
 def restart_service(context: dict) -> dict:
     """
     Restart a failing OpenBMC service.
@@ -120,6 +125,7 @@ def restart_service(context: dict) -> dict:
 
 
 # ── CPU / performance actions ─────────────────────────────────────────────────
+
 
 def reduce_cpu_frequency(context: dict) -> dict:
     """
@@ -139,6 +145,7 @@ def enable_cpu_throttling(context: dict) -> dict:
 
 # ── Memory actions ────────────────────────────────────────────────────────────
 
+
 def isolate_memory_bank(context: dict) -> dict:
     """
     Take a faulty DIMM bank offline to prevent data corruption.
@@ -150,6 +157,7 @@ def isolate_memory_bank(context: dict) -> dict:
 
 
 # ── Power actions ─────────────────────────────────────────────────────────────
+
 
 def power_cycle_node(context: dict) -> dict:
     """
@@ -186,6 +194,7 @@ def emergency_shutdown(context: dict) -> dict:
 
 # ── PSU / voltage actions ─────────────────────────────────────────────────────
 
+
 def check_psu_voltage(context: dict) -> dict:
     """
     Read PSU voltage rails and log them for operator review.
@@ -207,6 +216,7 @@ def switch_to_redundant_psu(context: dict) -> dict:
 
 
 # ── Rollback actions (called by rollback_manager) ────────────────────────────
+
 
 def restore_fan_speed(context: dict) -> dict:
     """Rollback for Increase Fan Speed — return to default speed."""

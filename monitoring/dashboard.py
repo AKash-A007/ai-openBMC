@@ -38,19 +38,20 @@ sys.path.append(str(Path(__file__).resolve().parent.parent / "telemetry"))
 sys.path.append(str(Path(__file__).resolve().parent.parent / "analytics"))
 sys.path.append(str(Path(__file__).resolve().parent))
 
-from query import get_sensor_history_full, get_all_sensor_names   # noqa: E402
-from metrics import get_system_metrics                              # noqa: E402
-from alerts import get_alert_summary                                # noqa: E402
-from reports import get_recent_diagnoses, generate_weekly_report    # noqa: E402
-
+from query import get_sensor_history_full, get_all_sensor_names  # noqa: E402
+from metrics import get_system_metrics  # noqa: E402
+from alerts import get_alert_summary  # noqa: E402
+from reports import get_recent_diagnoses, generate_weekly_report  # noqa: E402
 
 SEVERITY_COLORS = {"CRITICAL": "🔴", "WARNING": "🟡", "INFO": "🟢"}
-RISK_COLORS     = {"HIGH": "🔴", "MEDIUM": "🟡", "LOW": "🟢", "UNKNOWN": "⚪"}
+RISK_COLORS = {"HIGH": "🔴", "MEDIUM": "🟡", "LOW": "🟢", "UNKNOWN": "⚪"}
 
 
 # ── Page setup ────────────────────────────────────────────────────────────────
 
-st.set_page_config(page_title="AI OpsBMC — Observability", page_icon="📊", layout="wide")
+st.set_page_config(
+    page_title="AI OpsBMC — Observability", page_icon="📊", layout="wide"
+)
 st.title("📊 AI OpsBMC — Observability Dashboard")
 st.caption("Phase B · Telemetry → Analytics → Visualization → Alerts")
 
@@ -141,12 +142,16 @@ diagnoses = get_recent_diagnoses(limit=10)
 
 if diagnoses:
     for d in diagnoses:
-        with st.expander(f"{d['sensor']} — {d['root_cause'][:60]}  ·  {d['timestamp'][:19]}"):
+        with st.expander(
+            f"{d['sensor']} — {d['root_cause'][:60]}  ·  {d['timestamp'][:19]}"
+        ):
             st.write(f"**Root Cause:** {d['root_cause']}")
             st.write(f"**Confidence:** {d['confidence']}")
 else:
-    st.caption("No diagnoses recorded yet. Diagnoses are logged whenever "
-               "Phase A's diagnosis agent calls `database.insert_diagnosis()`.")
+    st.caption(
+        "No diagnoses recorded yet. Diagnoses are logged whenever "
+        "Phase A's diagnosis agent calls `database.insert_diagnosis()`."
+    )
 
 
 # ── Row 5: Weekly Report snapshot ──────────────────────────────────────────────

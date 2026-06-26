@@ -1,4 +1,4 @@
-# #this is the file so that we can run the entire pipeline together 
+# #this is the file so that we can run the entire pipeline together
 # """
 # main.py  —  Orchestrator
 # Run this to execute the full pipeline:
@@ -17,7 +17,8 @@ from agent import diagnose
 import signal
 import sys
 from dotenv import load_dotenv
-load_dotenv()          # reads .env automatically, no terminal setup needed
+
+load_dotenv()  # reads .env automatically, no terminal setup needed
 # def run_pipeline(fetch_live: bool = False) -> None:
 
 #     # ── Step 1: Optionally fetch live Redfish data ─────────────────────────────
@@ -102,43 +103,48 @@ from parser import extract_all_events
 from agent import diagnose
 
 # ── Phase C Week 4: Automation pipeline ───────────────────────────────────────
-from automation.policy_engine    import evaluate_policy, ApprovalMode
+from automation.policy_engine import evaluate_policy, ApprovalMode
 from automation.approval_manager import ApprovalManager, ApprovalStatus
 from automation.execution_engine import ExecutionEngine
-from automation.audit_logger     import AuditLogger
-
+from automation.audit_logger import AuditLogger
 
 # ── Pydantic models (request / response shapes) ────────────────────────────────
 
+
 class EventInput(BaseModel):
     """Input for POST /diagnose"""
+
     sensor: str
     event: str
-    severity: str = "WARNING"           # default if caller omits it
+    severity: str = "WARNING"  # default if caller omits it
 
 
 class ScenarioRequest(BaseModel):
     """Input for POST /diagnose/scenario"""
-    name: str                            # e.g. "dimm_failure"
+
+    name: str  # e.g. "dimm_failure"
 
 
 class RemediateRequest(BaseModel):
     """Input for POST /remediate — wraps a diagnosis result"""
-    issue        : str
-    action       : str               # recommendation from diagnosis
-    sensor       : str  = "UNKNOWN"
-    severity     : str  = "UNKNOWN"
-    executed_by  : str  = "auto"     # override to record human initiator
+
+    issue: str
+    action: str  # recommendation from diagnosis
+    sensor: str = "UNKNOWN"
+    severity: str = "UNKNOWN"
+    executed_by: str = "auto"  # override to record human initiator
 
 
 class ApprovalActionRequest(BaseModel):
     """Input for POST /approvals/{id}/approve or /reject"""
-    resolved_by : str  = "ops-engineer"
-    notes       : str  = ""
+
+    resolved_by: str = "ops-engineer"
+    notes: str = ""
 
 
 class DiagnosisResponse(BaseModel):
     """Structured response returned by all diagnosis endpoints"""
+
     event: dict
     root_cause: str
     severity: str
@@ -154,28 +160,28 @@ class DiagnosisResponse(BaseModel):
 
 SCENARIOS: dict[str, dict] = {
     "dimm_failure": {
-        "sensor"  : "DIMM_B2",
-        "event"   : "Memory ECC Error",
+        "sensor": "DIMM_B2",
+        "event": "Memory ECC Error",
         "severity": "WARNING",
     },
     "cpu_overheat": {
-        "sensor"  : "CPU0",
-        "event"   : "CPU Over Temperature",
+        "sensor": "CPU0",
+        "event": "CPU Over Temperature",
         "severity": "CRITICAL",
     },
     "psu_failure": {
-        "sensor"  : "PSU1",
-        "event"   : "Power Supply Failure",
+        "sensor": "PSU1",
+        "event": "Power Supply Failure",
         "severity": "CRITICAL",
     },
     "fan_fault": {
-        "sensor"  : "FAN_3",
-        "event"   : "Fan Fault",
+        "sensor": "FAN_3",
+        "event": "Fan Fault",
         "severity": "WARNING",
     },
     "voltage_fault": {
-        "sensor"  : "VR_CPU0",
-        "event"   : "Voltage Fault",
+        "sensor": "VR_CPU0",
+        "event": "Voltage Fault",
         "severity": "CRITICAL",
     },
 }
@@ -185,11 +191,13 @@ SCENARIOS: dict[str, dict] = {
 
 RESULTS_PATH = Path("./diagnosis_results.json")
 
+
 def _load_results() -> list:
     if RESULTS_PATH.exists():
         with open(RESULTS_PATH) as f:
             return json.load(f)
     return []
+
 
 def _save_results(results: list) -> None:
     with open(RESULTS_PATH, "w") as f:
@@ -203,11 +211,13 @@ def _save_results(results: list) -> None:
 
 INCIDENTS_PATH = Path("./incidents.json")
 
+
 def _load_incidents() -> list:
     if INCIDENTS_PATH.exists():
         with open(INCIDENTS_PATH) as f:
             return json.load(f)
     return []
+
 
 def _save_incidents(incidents: list) -> None:
     with open(INCIDENTS_PATH, "w") as f:
@@ -216,9 +226,9 @@ def _save_incidents(incidents: list) -> None:
 
 # ── Singletons for automation pipeline ────────────────────────────────────────
 # Shared across all requests — initialised once on startup
-_approval_manager : ApprovalManager | None = None
-_execution_engine : ExecutionEngine | None = None
-_audit_logger     : AuditLogger     | None = None
+_approval_manager: ApprovalManager | None = None
+_execution_engine: ExecutionEngine | None = None
+_audit_logger: AuditLogger | None = None
 
 
 @asynccontextmanager
@@ -227,7 +237,7 @@ async def lifespan(app: FastAPI):
     global _approval_manager, _execution_engine, _audit_logger
     print("[Main] Starting AI OpsBMC Autonomous Operations service...")
     try:
-        build_index()           # skips if already built
+        build_index()  # skips if already built
         print("[Main] RAG index ready.")
     except Exception as e:
         print(f"[Main] WARNING: Could not build index: {e}")
@@ -235,7 +245,7 @@ async def lifespan(app: FastAPI):
     # Initialise automation pipeline components
     _approval_manager = ApprovalManager()
     _execution_engine = ExecutionEngine()
-    _audit_logger     = AuditLogger()
+    _audit_logger = AuditLogger()
     print("[Main] Automation pipeline ready (Policy → Approve → Execute → Audit).")
     yield
     print("[Main] Shutting down.")
@@ -265,6 +275,7 @@ app.add_middleware(
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _run_diagnosis(event_dict: dict) -> DiagnosisResponse:
     """
     Core helper: run the full diagnosis pipeline and return a structured response.
@@ -281,18 +292,18 @@ def _run_diagnosis(event_dict: dict) -> DiagnosisResponse:
         raise HTTPException(status_code=422, detail=raw["error"])
 
     duration_ms = round((time.time() - start) * 1000, 2)
-    timestamp   = datetime.utcnow().isoformat() + "Z"
+    timestamp = datetime.utcnow().isoformat() + "Z"
 
     response = DiagnosisResponse(
-        event                    = event_dict,
-        root_cause               = raw.get("root_cause", "Unknown"),
-        severity                 = raw.get("severity",   "UNKNOWN"),
-        confidence               = raw.get("confidence", "0%"),
-        recommendation           = raw.get("recommendation", "No action available"),
-        requires_immediate_action= raw.get("requires_immediate_action", False),
-        rag_context              = raw.get("rag_context", ""),
-        timestamp                = timestamp,
-        duration_ms              = duration_ms,
+        event=event_dict,
+        root_cause=raw.get("root_cause", "Unknown"),
+        severity=raw.get("severity", "UNKNOWN"),
+        confidence=raw.get("confidence", "0%"),
+        recommendation=raw.get("recommendation", "No action available"),
+        requires_immediate_action=raw.get("requires_immediate_action", False),
+        rag_context=raw.get("rag_context", ""),
+        timestamp=timestamp,
+        duration_ms=duration_ms,
     )
 
     # Persist to results file
@@ -305,6 +316,7 @@ def _run_diagnosis(event_dict: dict) -> DiagnosisResponse:
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+
 @app.get("/health", tags=["System"])
 def health_check():
     """
@@ -312,19 +324,19 @@ def health_check():
     Streamlit uses this to verify the backend is alive.
     """
     try:
-        collection  = _get_collection()
+        collection = _get_collection()
         chunk_count = collection.count()
-        index_ok    = chunk_count > 0
+        index_ok = chunk_count > 0
     except Exception:
         chunk_count = 0
-        index_ok    = False
+        index_ok = False
 
     return {
-        "status"      : "healthy" if index_ok else "degraded",
-        "rag_index"   : "ready"   if index_ok else "empty — run build_index()",
-        "chunks"      : chunk_count,
-        "scenarios"   : list(SCENARIOS.keys()),
-        "timestamp"   : datetime.utcnow().isoformat() + "Z",
+        "status": "healthy" if index_ok else "degraded",
+        "rag_index": "ready" if index_ok else "empty — run build_index()",
+        "chunks": chunk_count,
+        "scenarios": list(SCENARIOS.keys()),
+        "timestamp": datetime.utcnow().isoformat() + "Z",
     }
 
 
@@ -333,8 +345,12 @@ def list_scenarios():
     """Return all available mock scenarios."""
     return {
         "scenarios": [
-            {"name": name, "sensor": s["sensor"], "event": s["event"],
-             "severity": s["severity"]}
+            {
+                "name": name,
+                "sensor": s["sensor"],
+                "event": s["event"],
+                "severity": s["severity"],
+            }
             for name, s in SCENARIOS.items()
         ]
     }
@@ -353,7 +369,7 @@ def get_scenario(name: str):
         raise HTTPException(
             status_code=404,
             detail=f"Scenario '{name}' not found. "
-                   f"Available: {list(SCENARIOS.keys())}"
+            f"Available: {list(SCENARIOS.keys())}",
         )
     return {"name": name, "event": SCENARIOS[name]}
 
@@ -381,10 +397,7 @@ def diagnose_by_scenario(req: ScenarioRequest):
     Output: full DiagnosisResponse
     """
     if req.name not in SCENARIOS:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Scenario '{req.name}' not found."
-        )
+        raise HTTPException(status_code=404, detail=f"Scenario '{req.name}' not found.")
     return _run_diagnosis(SCENARIOS[req.name])
 
 
@@ -396,8 +409,8 @@ def get_results(limit: int = 20):
     """
     results = _load_results()
     return {
-        "total"  : len(results),
-        "results": results[-limit:][::-1],   # newest first
+        "total": len(results),
+        "results": results[-limit:][::-1],  # newest first
     }
 
 
@@ -406,6 +419,7 @@ def clear_results():
     """Clear all stored diagnosis results."""
     _save_results([])
     return {"message": "Results cleared."}
+
 
 @app.post("/fetch", tags=["Live QEMU"])
 @app.post("/fetch", tags=["Live QEMU"])
@@ -416,10 +430,11 @@ def fetch_live_data():
     """
     try:
         from redfish_client import fetch_all
+
         fetch_all()
         return {
-            "status"  : "success",
-            "message" : "Live Redfish data fetched from QEMU",
+            "status": "success",
+            "message": "Live Redfish data fetched from QEMU",
             "saved_to": "./redfish_data/",
         }
 
@@ -428,10 +443,10 @@ def fetch_live_data():
         raise HTTPException(
             status_code=503,
             detail={
-                "error"  : "BMC_NOT_FOUND",
+                "error": "BMC_NOT_FOUND",
                 "message": str(e),
-                "hint"   : "Start QEMU first: qemu-system-arm -machine romulus-bmc ...",
-            }
+                "hint": "Start QEMU first: qemu-system-arm -machine romulus-bmc ...",
+            },
         )
 
     except TimeoutError as e:
@@ -439,28 +454,29 @@ def fetch_live_data():
         raise HTTPException(
             status_code=504,
             detail={
-                "error"  : "BMC_TIMEOUT",
+                "error": "BMC_TIMEOUT",
                 "message": str(e),
-                "hint"   : "Wait 2-3 minutes for QEMU to fully boot, then retry.",
-            }
+                "hint": "Wait 2-3 minutes for QEMU to fully boot, then retry.",
+            },
         )
 
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail={
-                "error"  : "FETCH_FAILED",
+                "error": "FETCH_FAILED",
                 "message": str(e),
-                "hint"   : "Check QEMU terminal for errors.",
-            }
+                "hint": "Check QEMU terminal for errors.",
+            },
         )
+
 
 @app.get("/diagnose/live", tags=["Live QEMU"])
 def diagnose_live():
     """
     Step 2: Parse the saved Redfish JSON files and diagnose all real events.
     Run /fetch first to get fresh data from QEMU.
-    
+
     Returns all diagnosed events found in the real hardware state.
     """
     # Parse real events from saved redfish_data/ JSON files
@@ -469,14 +485,14 @@ def diagnose_live():
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to parse Redfish data: {e}. Run POST /fetch first."
+            detail=f"Failed to parse Redfish data: {e}. Run POST /fetch first.",
         )
 
     if not events:
         return {
-            "status" : "ok",
+            "status": "ok",
             "message": "No faults detected in live QEMU data — system healthy",
-            "events" : [],
+            "events": [],
             "results": [],
         }
 
@@ -487,18 +503,23 @@ def diagnose_live():
             result = _run_diagnosis(event)
             results.append(result.model_dump())
         except HTTPException as e:
-            results.append({
-                "event" : event,
-                "error" : e.detail,
-            })
+            results.append(
+                {
+                    "event": event,
+                    "error": e.detail,
+                }
+            )
 
     return {
-        "status"      : "ok",
-        "source"      : "live_qemu",
+        "status": "ok",
+        "source": "live_qemu",
         "events_found": len(results),
-        "results"     : results,
+        "results": results,
     }
+
+
 # ── Phase C Week 4: Autonomous Remediation Endpoints ─────────────────────────
+
 
 @app.post("/remediate", tags=["Remediation"])
 def remediate(req: RemediateRequest):
@@ -515,71 +536,73 @@ def remediate(req: RemediateRequest):
     if policy == ApprovalMode.AUTO:
         # Execute immediately — no human needed
         result = _execution_engine.execute(
-            action      = req.action,
-            issue       = req.issue,
-            sensor      = req.sensor,
-            severity    = req.severity,
-            policy      = policy.value,
-            executed_by = req.executed_by,
+            action=req.action,
+            issue=req.issue,
+            sensor=req.sensor,
+            severity=req.severity,
+            policy=policy.value,
+            executed_by=req.executed_by,
         )
 
         # Record in incident store
         incidents = _load_incidents()
         incident_id = str(uuid.uuid4())
-        incidents.append({
-            "id"           : incident_id,
-            "issue"        : req.issue,
-            "sensor"       : req.sensor,
-            "severity"     : req.severity,
-            "action"       : req.action,
-            "policy"       : policy.value,
-            "execution"    : result,
-            "detected_at"  : result["timestamp"],
-            "executed_at"  : result["timestamp"],
-            "resolved"     : result["success"],
-            "resolved_at"  : result["timestamp"] if result["success"] else None,
-        })
+        incidents.append(
+            {
+                "id": incident_id,
+                "issue": req.issue,
+                "sensor": req.sensor,
+                "severity": req.severity,
+                "action": req.action,
+                "policy": policy.value,
+                "execution": result,
+                "detected_at": result["timestamp"],
+                "executed_at": result["timestamp"],
+                "resolved": result["success"],
+                "resolved_at": result["timestamp"] if result["success"] else None,
+            }
+        )
         _save_incidents(incidents)
 
         return {
-            "mode"        : "AUTO",
-            "incident_id" : incident_id,
-            "action"      : req.action,
-            "status"      : result["status"],
-            "success"     : result["success"],
-            "details"     : result["details"],
-            "audit_id"    : result.get("audit_id"),
-            "rollback"    : result.get("rollback"),
-            "timestamp"   : result["timestamp"],
+            "mode": "AUTO",
+            "incident_id": incident_id,
+            "action": req.action,
+            "status": result["status"],
+            "success": result["success"],
+            "details": result["details"],
+            "audit_id": result.get("audit_id"),
+            "rollback": result.get("rollback"),
+            "timestamp": result["timestamp"],
         }
 
     else:
         # MANUAL — create approval request
         approval = _approval_manager.request_approval(
-            issue    = req.issue,
-            action   = req.action,
-            sensor   = req.sensor,
-            severity = req.severity,
-            policy   = policy.value,
+            issue=req.issue,
+            action=req.action,
+            sensor=req.sensor,
+            severity=req.severity,
+            policy=policy.value,
         )
         # Log the pending action in audit log
         _audit_logger.log(
-            issue       = req.issue,
-            action      = req.action,
-            status      = "PENDING",
-            executed_by = req.executed_by,
-            policy      = policy.value,
-            sensor      = req.sensor,
-            severity    = req.severity,
-            details     = f"Approval request created: {approval.id}",
+            issue=req.issue,
+            action=req.action,
+            status="PENDING",
+            executed_by=req.executed_by,
+            policy=policy.value,
+            sensor=req.sensor,
+            severity=req.severity,
+            details=f"Approval request created: {approval.id}",
         )
         return {
-            "mode"          : "MANUAL",
-            "approval_id"   : approval.id,
-            "action"        : req.action,
-            "status"        : "PENDING",
-            "message"       : "Action requires human approval. Use POST /approvals/{id}/approve.",
-            "requested_at"  : approval.requested_at,
+            "mode": "MANUAL",
+            "approval_id": approval.id,
+            "action": req.action,
+            "status": "PENDING",
+            "message": "Action requires human approval. Use POST /approvals/{id}/approve.",
+            "requested_at": approval.requested_at,
         }
 
 
@@ -595,9 +618,9 @@ def list_approvals(pending_only: bool = False):
         else _approval_manager.list_all(limit=50)
     )
     return {
-        "total"    : len(requests),
-        "requests" : [r.to_dict() for r in requests],
-        "stats"    : _approval_manager.stats(),
+        "total": len(requests),
+        "requests": [r.to_dict() for r in requests],
+        "stats": _approval_manager.stats(),
     }
 
 
@@ -609,48 +632,52 @@ def approve_action(request_id: str, body: ApprovalActionRequest):
     try:
         approval = _approval_manager.approve(request_id, approved_by=body.resolved_by)
     except KeyError:
-        raise HTTPException(status_code=404, detail=f"Approval request '{request_id}' not found.")
+        raise HTTPException(
+            status_code=404, detail=f"Approval request '{request_id}' not found."
+        )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
     # Now execute
     result = _execution_engine.execute(
-        action      = approval.action,
-        issue       = approval.issue,
-        sensor      = approval.sensor,
-        severity    = approval.severity,
-        policy      = approval.policy,
-        executed_by = body.resolved_by,
+        action=approval.action,
+        issue=approval.issue,
+        sensor=approval.sensor,
+        severity=approval.severity,
+        policy=approval.policy,
+        executed_by=body.resolved_by,
     )
 
     # Record incident
     incidents = _load_incidents()
     incident_id = str(uuid.uuid4())
-    incidents.append({
-        "id"           : incident_id,
-        "issue"        : approval.issue,
-        "sensor"       : approval.sensor,
-        "severity"     : approval.severity,
-        "action"       : approval.action,
-        "policy"       : "MANUAL",
-        "approval_id"  : approval.id,
-        "execution"    : result,
-        "detected_at"  : approval.requested_at,
-        "approved_at"  : approval.resolved_at,
-        "executed_at"  : result["timestamp"],
-        "resolved"     : result["success"],
-        "resolved_at"  : result["timestamp"] if result["success"] else None,
-    })
+    incidents.append(
+        {
+            "id": incident_id,
+            "issue": approval.issue,
+            "sensor": approval.sensor,
+            "severity": approval.severity,
+            "action": approval.action,
+            "policy": "MANUAL",
+            "approval_id": approval.id,
+            "execution": result,
+            "detected_at": approval.requested_at,
+            "approved_at": approval.resolved_at,
+            "executed_at": result["timestamp"],
+            "resolved": result["success"],
+            "resolved_at": result["timestamp"] if result["success"] else None,
+        }
+    )
     _save_incidents(incidents)
 
     return {
-        "approval_id" : request_id,
-        "incident_id" : incident_id,
-        "action"      : approval.action,
-        "status"      : result["status"],
-        "success"     : result["success"],
-        "details"     : result["details"],
-        "audit_id"    : result.get("audit_id"),
+        "approval_id": request_id,
+        "incident_id": incident_id,
+        "action": approval.action,
+        "status": result["status"],
+        "success": result["success"],
+        "details": result["details"],
+        "audit_id": result.get("audit_id"),
     }
 
 
@@ -660,29 +687,31 @@ def reject_action(request_id: str, body: ApprovalActionRequest):
     try:
         approval = _approval_manager.reject(
             request_id,
-            rejected_by = body.resolved_by,
-            reason      = body.notes,
+            rejected_by=body.resolved_by,
+            reason=body.notes,
         )
     except KeyError:
-        raise HTTPException(status_code=404, detail=f"Approval request '{request_id}' not found.")
+        raise HTTPException(
+            status_code=404, detail=f"Approval request '{request_id}' not found."
+        )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
     _audit_logger.log(
-        issue       = approval.issue,
-        action      = approval.action,
-        status      = "REJECTED",
-        executed_by = body.resolved_by,
-        policy      = approval.policy,
-        sensor      = approval.sensor,
-        severity    = approval.severity,
-        details     = f"Rejected by {body.resolved_by}. Reason: {body.notes}",
+        issue=approval.issue,
+        action=approval.action,
+        status="REJECTED",
+        executed_by=body.resolved_by,
+        policy=approval.policy,
+        sensor=approval.sensor,
+        severity=approval.severity,
+        details=f"Rejected by {body.resolved_by}. Reason: {body.notes}",
     )
     return {
-        "approval_id" : request_id,
-        "action"      : approval.action,
-        "status"      : "REJECTED",
-        "resolved_by" : body.resolved_by,
+        "approval_id": request_id,
+        "action": approval.action,
+        "status": "REJECTED",
+        "resolved_by": body.resolved_by,
     }
 
 
@@ -694,10 +723,10 @@ def get_audit_log(limit: int = 50):
     """
     entries = _audit_logger.get_log(limit=limit)
     return {
-        "total"   : _audit_logger.count(),
-        "limit"   : limit,
-        "entries" : entries,
-        "stats"   : _audit_logger.stats(),
+        "total": _audit_logger.count(),
+        "limit": limit,
+        "entries": entries,
+        "stats": _audit_logger.stats(),
     }
 
 
@@ -709,8 +738,8 @@ def get_incidents(limit: int = 20):
     """
     incidents = _load_incidents()
     return {
-        "total"    : len(incidents),
-        "incidents": incidents[-limit:][::-1],   # newest first
+        "total": len(incidents),
+        "incidents": incidents[-limit:][::-1],  # newest first
     }
 
 
@@ -718,4 +747,5 @@ def get_incidents(limit: int = 20):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

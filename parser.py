@@ -12,12 +12,13 @@ DATA_DIR = Path("./redfish_data")
 # ── Event pattern matching ─────────────────────────────────────────────────────
 
 EVENT_PATTERNS = {
-    "ECC"                  : ("MEMORY", "ECC_ERROR"),
-    "CPU Over Temperature" : ("CPU",    "OVERHEAT"),
-    "Power Supply Failure" : ("PSU",    "FAILURE"),
-    "Fan Fault"            : ("COOLING","FAN_FAULT"),
-    "Voltage Fault"        : ("POWER",  "VOLTAGE_FAULT"),
+    "ECC": ("MEMORY", "ECC_ERROR"),
+    "CPU Over Temperature": ("CPU", "OVERHEAT"),
+    "Power Supply Failure": ("PSU", "FAILURE"),
+    "Fan Fault": ("COOLING", "FAN_FAULT"),
+    "Voltage Fault": ("POWER", "VOLTAGE_FAULT"),
 }
+
 
 def parse_event(event_str: str) -> dict | None:
     """Map a raw event string to category + event_type."""
@@ -33,22 +34,23 @@ def parse_log(log: dict) -> dict | None:
     Input : {"sensor": "DIMM_B2", "event": "Memory ECC Error", "severity": "WARNING"}
     Output: {"sensor": ..., "category": ..., "event_type": ..., "severity": ...}
     """
-    sensor   = log.get("sensor",   "UNKNOWN")
-    event    = log.get("event",    "")
+    sensor = log.get("sensor", "UNKNOWN")
+    event = log.get("event", "")
     severity = log.get("severity", "UNKNOWN")
 
     parsed = parse_event(event)
     if parsed:
         return {
-            "sensor"    : sensor,
-            "category"  : parsed["category"],
+            "sensor": sensor,
+            "category": parsed["category"],
             "event_type": parsed["event_type"],
-            "severity"  : severity,
+            "severity": severity,
         }
     return None
 
 
 # ── JSON file readers ──────────────────────────────────────────────────────────
+
 
 def load_json(filename: str) -> dict:
     """Load a saved Redfish JSON file from DATA_DIR."""
@@ -68,31 +70,29 @@ def extract_events_from_system(system_data: dict) -> list[dict]:
 
     # Pull from MemorySummary health status
     memory_health = (
-        system_data
-        .get("MemorySummary", {})
-        .get("Status", {})
-        .get("Health", "OK")
+        system_data.get("MemorySummary", {}).get("Status", {}).get("Health", "OK")
     )
     if memory_health != "OK":
-        events.append({
-            "sensor"  : "MemorySummary",
-            "event"   : "Memory ECC Error",
-            "severity": "WARNING" if memory_health == "Warning" else "CRITICAL",
-        })
+        events.append(
+            {
+                "sensor": "MemorySummary",
+                "event": "Memory ECC Error",
+                "severity": "WARNING" if memory_health == "Warning" else "CRITICAL",
+            }
+        )
 
     # Pull from ProcessorSummary health status
     cpu_health = (
-        system_data
-        .get("ProcessorSummary", {})
-        .get("Status", {})
-        .get("Health", "OK")
+        system_data.get("ProcessorSummary", {}).get("Status", {}).get("Health", "OK")
     )
     if cpu_health != "OK":
-        events.append({
-            "sensor"  : "ProcessorSummary",
-            "event"   : "CPU Over Temperature",
-            "severity": "WARNING" if cpu_health == "Warning" else "CRITICAL",
-        })
+        events.append(
+            {
+                "sensor": "ProcessorSummary",
+                "event": "CPU Over Temperature",
+                "severity": "WARNING" if cpu_health == "Warning" else "CRITICAL",
+            }
+        )
 
     return events
 
@@ -104,17 +104,19 @@ def extract_events_from_thermal(thermal_data: dict) -> list[dict]:
     """
     events = []
     for temp in thermal_data.get("Temperatures", []):
-        name    = temp.get("Name", "UNKNOWN")
+        name = temp.get("Name", "UNKNOWN")
         reading = temp.get("ReadingCelsius")
-        upper   = temp.get("UpperThresholdCritical")
-        health  = temp.get("Status", {}).get("Health", "OK")
+        upper = temp.get("UpperThresholdCritical")
+        health = temp.get("Status", {}).get("Health", "OK")
 
         if health != "OK" or (reading and upper and reading >= upper):
-            events.append({
-                "sensor"  : name,
-                "event"   : "CPU Over Temperature",
-                "severity": "CRITICAL" if health == "Critical" else "WARNING",
-            })
+            events.append(
+                {
+                    "sensor": name,
+                    "event": "CPU Over Temperature",
+                    "severity": "CRITICAL" if health == "Critical" else "WARNING",
+                }
+            )
     return events
 
 
@@ -124,14 +126,16 @@ def extract_events_from_power(power_data: dict) -> list[dict]:
     """
     events = []
     for psu in power_data.get("PowerSupplies", []):
-        name   = psu.get("Name", "UNKNOWN")
+        name = psu.get("Name", "UNKNOWN")
         health = psu.get("Status", {}).get("Health", "OK")
         if health != "OK":
-            events.append({
-                "sensor"  : name,
-                "event"   : "Power Supply Failure",
-                "severity": "CRITICAL",
-            })
+            events.append(
+                {
+                    "sensor": name,
+                    "event": "Power Supply Failure",
+                    "severity": "CRITICAL",
+                }
+            )
     return events
 
 
@@ -143,14 +147,14 @@ def extract_all_events() -> list[dict]:
     all_events = []
 
     loaders = [
-        ("system.json",  extract_events_from_system),
+        ("system.json", extract_events_from_system),
         ("thermal.json", extract_events_from_thermal),
-        ("power.json",   extract_events_from_power),
+        ("power.json", extract_events_from_power),
     ]
 
     for filename, extractor in loaders:
         try:
-            data   = load_json(filename)
+            data = load_json(filename)
             events = extractor(data)
             all_events.extend(events)
             print(f"[Parser] {filename} → {len(events)} event(s) found")

@@ -23,12 +23,12 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent / "telemetry"))
 sys.path.append(str(Path(__file__).resolve().parent.parent / "analytics"))
 
-from query import get_sensor_history, get_all_sensor_names   # noqa: E402
-from health_score import calculate_fleet_health               # noqa: E402
-from predictor import predict_failure                          # noqa: E402
-
+from query import get_sensor_history, get_all_sensor_names  # noqa: E402
+from health_score import calculate_fleet_health  # noqa: E402
+from predictor import predict_failure  # noqa: E402
 
 # ── Single-sensor metrics ──────────────────────────────────────────────────────
+
 
 def get_average_value(sensor: str, limit: int = 200) -> float | None:
     """Mean of a sensor's recent readings. None if no data exists yet."""
@@ -65,15 +65,16 @@ def get_sensor_metrics(sensor: str, limit: int = 200) -> dict:
 
     return {
         "sensor": sensor,
-        "count" : len(values),
-        "avg"   : round(sum(values) / len(values), 2),
-        "max"   : max(values),
-        "min"   : min(values),
+        "count": len(values),
+        "avg": round(sum(values) / len(values), 2),
+        "max": max(values),
+        "min": min(values),
         "latest": values[-1],
     }
 
 
 # ── Fleet-wide aggregate metrics ───────────────────────────────────────────────
+
 
 def get_average_health(limit: int = 200) -> float | None:
     """
@@ -108,7 +109,12 @@ def get_failure_rate(limit: int = 200) -> dict:
     """
     sensors = get_all_sensor_names()
     if not sensors:
-        return {"total_sensors": 0, "at_risk_sensors": 0, "failure_rate": 0.0, "at_risk": []}
+        return {
+            "total_sensors": 0,
+            "at_risk_sensors": 0,
+            "failure_rate": 0.0,
+            "at_risk": [],
+        }
 
     at_risk = []
     for sensor in sensors:
@@ -117,10 +123,10 @@ def get_failure_rate(limit: int = 200) -> dict:
             at_risk.append(sensor)
 
     return {
-        "total_sensors"  : len(sensors),
+        "total_sensors": len(sensors),
         "at_risk_sensors": len(at_risk),
-        "failure_rate"   : round(len(at_risk) / len(sensors), 3),
-        "at_risk"        : at_risk,
+        "failure_rate": round(len(at_risk) / len(sensors), 3),
+        "at_risk": at_risk,
     }
 
 
@@ -143,17 +149,19 @@ def get_system_metrics(limit: int = 200) -> dict:
         }
     """
     sensors = get_all_sensor_names()
-    fleet   = calculate_fleet_health(sensors, limit=limit) if sensors else {
-        "overall_health_score": None, "overall_risk": "UNKNOWN"
-    }
-    rate    = get_failure_rate(limit=limit)
+    fleet = (
+        calculate_fleet_health(sensors, limit=limit)
+        if sensors
+        else {"overall_health_score": None, "overall_risk": "UNKNOWN"}
+    )
+    rate = get_failure_rate(limit=limit)
 
     return {
-        "overall_health" : fleet["overall_health_score"],
-        "overall_risk"   : fleet["overall_risk"],
-        "failure_rate"   : rate["failure_rate"],
+        "overall_health": fleet["overall_health_score"],
+        "overall_risk": fleet["overall_risk"],
+        "failure_rate": rate["failure_rate"],
         "at_risk_sensors": rate["at_risk"],
-        "sensors"        : {s: get_sensor_metrics(s, limit=limit) for s in sensors},
+        "sensors": {s: get_sensor_metrics(s, limit=limit) for s in sensors},
     }
 
 

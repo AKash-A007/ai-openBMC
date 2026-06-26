@@ -39,26 +39,26 @@ from action_executor import (
     restore_cpu_frequency,
 )
 
-
 # ── Rollback table ────────────────────────────────────────────────────────────
 # Maps: original action string → rollback executor function (or None)
 
 ROLLBACKS: dict[str, Callable | None] = {
-    "Increase Fan Speed"      : restore_fan_speed,
-    "Reduce Fan Speed"        : restore_fan_speed,
-    "Restart Service"         : restore_service_state,
-    "Reduce CPU Frequency"    : restore_cpu_frequency,
-    "Enable CPU Throttling"   : restore_cpu_frequency,
-    "Isolate Memory Bank"     : None,    # data already affected — no safe undo
-    "Power Cycle Node"        : None,    # node is rebooting — can't undo
-    "Shutdown System"         : None,    # system is off
-    "Emergency Shutdown"      : None,    # system is off
-    "Check PSU Voltage"       : None,    # read-only — nothing to undo
-    "Switch to Redundant PSU" : None,    # PSU switch — manual reversal required
+    "Increase Fan Speed": restore_fan_speed,
+    "Reduce Fan Speed": restore_fan_speed,
+    "Restart Service": restore_service_state,
+    "Reduce CPU Frequency": restore_cpu_frequency,
+    "Enable CPU Throttling": restore_cpu_frequency,
+    "Isolate Memory Bank": None,  # data already affected — no safe undo
+    "Power Cycle Node": None,  # node is rebooting — can't undo
+    "Shutdown System": None,  # system is off
+    "Emergency Shutdown": None,  # system is off
+    "Check PSU Voltage": None,  # read-only — nothing to undo
+    "Switch to Redundant PSU": None,  # PSU switch — manual reversal required
 }
 
 
 # ── RollbackManager ───────────────────────────────────────────────────────────
+
 
 class RollbackManager:
     """
@@ -88,10 +88,10 @@ class RollbackManager:
             )
             print(f"[Rollback] {msg}")
             return {
-                "original_action" : action,
-                "status"          : "NO_ROLLBACK",
-                "success"         : False,
-                "details"         : msg,
+                "original_action": action,
+                "status": "NO_ROLLBACK",
+                "success": False,
+                "details": msg,
             }
 
         print(f"[Rollback] Attempting rollback for '{action}'…")
@@ -99,29 +99,29 @@ class RollbackManager:
             rb_result = rollback_fn(context)
             if rb_result["success"]:
                 return {
-                    "original_action"  : action,
-                    "rollback_action"  : rb_result["action"],
-                    "status"           : "ROLLED_BACK",
-                    "success"          : True,
-                    "details"          : rb_result["details"],
-                    "duration_ms"      : rb_result.get("duration_ms", 0),
+                    "original_action": action,
+                    "rollback_action": rb_result["action"],
+                    "status": "ROLLED_BACK",
+                    "success": True,
+                    "details": rb_result["details"],
+                    "duration_ms": rb_result.get("duration_ms", 0),
                 }
             else:
                 return {
-                    "original_action"  : action,
-                    "rollback_action"  : rb_result["action"],
-                    "status"           : "ROLLBACK_FAILED",
-                    "success"          : False,
-                    "details"          : rb_result["details"],
+                    "original_action": action,
+                    "rollback_action": rb_result["action"],
+                    "status": "ROLLBACK_FAILED",
+                    "success": False,
+                    "details": rb_result["details"],
                 }
         except Exception as e:
             msg = f"Rollback executor raised an exception: {e}"
             print(f"[Rollback] ERROR: {msg}")
             return {
-                "original_action" : action,
-                "status"          : "ROLLBACK_FAILED",
-                "success"         : False,
-                "details"         : msg,
+                "original_action": action,
+                "status": "ROLLBACK_FAILED",
+                "success": False,
+                "details": msg,
             }
 
     def has_rollback(self, action: str) -> bool:

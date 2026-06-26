@@ -35,33 +35,34 @@ from dataclasses import dataclass, field, asdict
 
 # Allow importing from sibling telemetry/ directory
 sys.path.append(str(Path(__file__).resolve().parent.parent / "telemetry"))
-from database import get_connection, init_db   # noqa: E402
-
+from database import get_connection, init_db  # noqa: E402
 
 # ── Status enum ───────────────────────────────────────────────────────────────
 
+
 class ApprovalStatus(str, Enum):
-    PENDING  = "PENDING"
+    PENDING = "PENDING"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
-    EXPIRED  = "EXPIRED"
+    EXPIRED = "EXPIRED"
 
 
 # ── Data model ────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class ApprovalRequest:
-    id             : str
-    issue          : str             # e.g. "CPU_OVERHEAT"
-    action         : str             # e.g. "Shutdown System"
-    sensor         : str             # e.g. "CPU0"
-    severity       : str             # e.g. "CRITICAL"
-    policy         : str             # "AUTO" | "MANUAL"
-    status         : ApprovalStatus  = ApprovalStatus.PENDING
-    requested_at   : str             = field(default_factory=lambda: _now())
-    resolved_at    : str | None      = None
-    resolved_by    : str | None      = None
-    notes          : str             = ""
+    id: str
+    issue: str  # e.g. "CPU_OVERHEAT"
+    action: str  # e.g. "Shutdown System"
+    sensor: str  # e.g. "CPU0"
+    severity: str  # e.g. "CRITICAL"
+    policy: str  # "AUTO" | "MANUAL"
+    status: ApprovalStatus = ApprovalStatus.PENDING
+    requested_at: str = field(default_factory=lambda: _now())
+    resolved_at: str | None = None
+    resolved_by: str | None = None
+    notes: str = ""
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -74,6 +75,7 @@ def _now() -> str:
 
 
 # ── SQLite persistence helpers ────────────────────────────────────────────────
+
 
 def _ensure_table() -> None:
     """Create the approval_requests table if it doesn't exist."""
@@ -99,16 +101,27 @@ def _ensure_table() -> None:
 def _persist(req: ApprovalRequest) -> None:
     """Insert or update a request row in SQLite."""
     with get_connection() as conn:
-        conn.execute("""
+        conn.execute(
+            """
             INSERT OR REPLACE INTO approval_requests
                 (id, issue, action, sensor, severity, policy, status,
                  requested_at, resolved_at, resolved_by, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            req.id, req.issue, req.action, req.sensor, req.severity,
-            req.policy, req.status.value, req.requested_at,
-            req.resolved_at, req.resolved_by, req.notes,
-        ))
+        """,
+            (
+                req.id,
+                req.issue,
+                req.action,
+                req.sensor,
+                req.severity,
+                req.policy,
+                req.status.value,
+                req.requested_at,
+                req.resolved_at,
+                req.resolved_by,
+                req.notes,
+            ),
+        )
 
 
 def _load_all_from_db() -> list[ApprovalRequest]:
@@ -122,17 +135,17 @@ def _load_all_from_db() -> list[ApprovalRequest]:
         result = []
         for row in rows:
             req = ApprovalRequest(
-                id           = row["id"],
-                issue        = row["issue"],
-                action       = row["action"],
-                sensor       = row["sensor"],
-                severity     = row["severity"],
-                policy       = row["policy"],
-                status       = ApprovalStatus(row["status"]),
-                requested_at = row["requested_at"],
-                resolved_at  = row["resolved_at"],
-                resolved_by  = row["resolved_by"],
-                notes        = row["notes"] or "",
+                id=row["id"],
+                issue=row["issue"],
+                action=row["action"],
+                sensor=row["sensor"],
+                severity=row["severity"],
+                policy=row["policy"],
+                status=ApprovalStatus(row["status"]),
+                requested_at=row["requested_at"],
+                resolved_at=row["resolved_at"],
+                resolved_by=row["resolved_by"],
+                notes=row["notes"] or "",
             )
             result.append(req)
         return result
@@ -141,6 +154,7 @@ def _load_all_from_db() -> list[ApprovalRequest]:
 
 
 # ── ApprovalManager ───────────────────────────────────────────────────────────
+
 
 class ApprovalManager:
     """
@@ -157,33 +171,31 @@ class ApprovalManager:
     def __init__(self) -> None:
         _ensure_table()
         # In-memory index keyed by request ID
-        self._store: dict[str, ApprovalRequest] = {
-            r.id: r for r in _load_all_from_db()
-        }
+        self._store: dict[str, ApprovalRequest] = {r.id: r for r in _load_all_from_db()}
 
     # ── Create ────────────────────────────────────────────────────────────────
 
     def request_approval(
         self,
-        issue   : str,
-        action  : str,
-        sensor  : str = "UNKNOWN",
+        issue: str,
+        action: str,
+        sensor: str = "UNKNOWN",
         severity: str = "UNKNOWN",
-        policy  : str = "MANUAL",
-        notes   : str = "",
+        policy: str = "MANUAL",
+        notes: str = "",
     ) -> ApprovalRequest:
         """
         Create a new approval request and persist it.
         Returns the new ApprovalRequest object.
         """
         req = ApprovalRequest(
-            id       = str(uuid.uuid4()),
-            issue    = issue,
-            action   = action,
-            sensor   = sensor,
-            severity = severity,
-            policy   = policy,
-            notes    = notes,
+            id=str(uuid.uuid4()),
+            issue=issue,
+            action=action,
+            sensor=sensor,
+            severity=severity,
+            policy=policy,
+            notes=notes,
         )
         self._store[req.id] = req
         _persist(req)
@@ -204,10 +216,7 @@ class ApprovalManager:
 
     def list_pending(self) -> list[ApprovalRequest]:
         """Return only PENDING requests — the queue a human operator sees."""
-        return [
-            r for r in self._store.values()
-            if r.status == ApprovalStatus.PENDING
-        ]
+        return [r for r in self._store.values() if r.status == ApprovalStatus.PENDING]
 
     # ── Resolve ───────────────────────────────────────────────────────────────
 
@@ -221,23 +230,25 @@ class ApprovalManager:
             raise KeyError(f"ApprovalRequest '{request_id}' not found")
         if req.status != ApprovalStatus.PENDING:
             raise ValueError(f"Request is already {req.status.value}")
-        req.status      = ApprovalStatus.APPROVED
+        req.status = ApprovalStatus.APPROVED
         req.resolved_at = _now()
         req.resolved_by = approved_by
         _persist(req)
         return req
 
-    def reject(self, request_id: str, rejected_by: str = "system", reason: str = "") -> ApprovalRequest:
+    def reject(
+        self, request_id: str, rejected_by: str = "system", reason: str = ""
+    ) -> ApprovalRequest:
         """Mark a request as REJECTED — action will not execute."""
         req = self._store.get(request_id)
         if req is None:
             raise KeyError(f"ApprovalRequest '{request_id}' not found")
         if req.status != ApprovalStatus.PENDING:
             raise ValueError(f"Request is already {req.status.value}")
-        req.status      = ApprovalStatus.REJECTED
+        req.status = ApprovalStatus.REJECTED
         req.resolved_at = _now()
         req.resolved_by = rejected_by
-        req.notes       = reason
+        req.notes = reason
         _persist(req)
         return req
 
@@ -246,10 +257,10 @@ class ApprovalManager:
     def stats(self) -> dict:
         all_reqs = list(self._store.values())
         return {
-            "total"    : len(all_reqs),
-            "pending"  : sum(1 for r in all_reqs if r.status == ApprovalStatus.PENDING),
-            "approved" : sum(1 for r in all_reqs if r.status == ApprovalStatus.APPROVED),
-            "rejected" : sum(1 for r in all_reqs if r.status == ApprovalStatus.REJECTED),
+            "total": len(all_reqs),
+            "pending": sum(1 for r in all_reqs if r.status == ApprovalStatus.PENDING),
+            "approved": sum(1 for r in all_reqs if r.status == ApprovalStatus.APPROVED),
+            "rejected": sum(1 for r in all_reqs if r.status == ApprovalStatus.REJECTED),
         }
 
 
@@ -263,11 +274,11 @@ if __name__ == "__main__":
 
     # Create a MANUAL request
     req = mgr.request_approval(
-        issue    = "CPU_OVERHEAT",
-        action   = "Shutdown System",
-        sensor   = "CPU0",
-        severity = "CRITICAL",
-        policy   = "MANUAL",
+        issue="CPU_OVERHEAT",
+        action="Shutdown System",
+        sensor="CPU0",
+        severity="CRITICAL",
+        policy="MANUAL",
     )
     print(f"Created request : {req.id[:8]}…  status={req.status.value}")
 
@@ -277,8 +288,11 @@ if __name__ == "__main__":
 
     # Create and reject another
     req2 = mgr.request_approval(
-        issue="FAN_FAULT", action="Shutdown System",
-        sensor="FAN_3", severity="WARNING", policy="MANUAL",
+        issue="FAN_FAULT",
+        action="Shutdown System",
+        sensor="FAN_3",
+        severity="WARNING",
+        policy="MANUAL",
     )
     mgr.reject(req2.id, rejected_by="ops-lead", reason="Non-critical — monitor first")
     print(f"After reject    : status={mgr.get(req2.id).status.value}")

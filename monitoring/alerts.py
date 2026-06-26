@@ -24,10 +24,9 @@ from datetime import datetime, timezone
 sys.path.append(str(Path(__file__).resolve().parent.parent / "telemetry"))
 sys.path.append(str(Path(__file__).resolve().parent.parent / "analytics"))
 
-from query import get_all_sensor_names              # noqa: E402
-from health_score import calculate_health_score      # noqa: E402
-from anomaly_detector import detect_anomalies        # noqa: E402
-
+from query import get_all_sensor_names  # noqa: E402
+from health_score import calculate_health_score  # noqa: E402
+from anomaly_detector import detect_anomalies  # noqa: E402
 
 # ── Config — alert thresholds ─────────────────────────────────────────────────
 
@@ -38,13 +37,14 @@ from anomaly_detector import detect_anomalies        # noqa: E402
 # happen to align loosely here, but keeping them as distinct constants
 # means tuning alert sensitivity later doesn't require touching the
 # underlying risk model.
-HEALTH_WARNING_THRESHOLD  = 80   # below this: WARNING
-HEALTH_CRITICAL_THRESHOLD = 60   # below this: CRITICAL
+HEALTH_WARNING_THRESHOLD = 80  # below this: WARNING
+HEALTH_CRITICAL_THRESHOLD = 60  # below this: CRITICAL
 
-FAILURE_PROB_ALERT_THRESHOLD = 0.75   # spec's explicit rule
+FAILURE_PROB_ALERT_THRESHOLD = 0.75  # spec's explicit rule
 
 
 # ── Severity classification ───────────────────────────────────────────────────
+
 
 def _severity_from_health(health_score: int) -> str:
     """
@@ -65,6 +65,7 @@ def _now() -> str:
 
 # ── Individual alert rules ────────────────────────────────────────────────────
 
+
 def _check_health_score(sensor: str, result: dict) -> dict | None:
     """
     Rule: if health_score < 70 (per spec) → ALERT.
@@ -79,15 +80,15 @@ def _check_health_score(sensor: str, result: dict) -> dict | None:
 
     severity = _severity_from_health(score)
     if severity == "INFO":
-        return None   # healthy — no alert
+        return None  # healthy — no alert
 
     return {
         "timestamp": _now(),
-        "sensor"   : sensor,
-        "severity" : severity,
-        "rule"     : "HEALTH_SCORE",
-        "message"  : f"{sensor} health score is {score}/100 — {severity.lower()} condition.",
-        "value"    : score,
+        "sensor": sensor,
+        "severity": severity,
+        "rule": "HEALTH_SCORE",
+        "message": f"{sensor} health score is {score}/100 — {severity.lower()} condition.",
+        "value": score,
     }
 
 
@@ -99,12 +100,12 @@ def _check_failure_probability(sensor: str, result: dict) -> dict | None:
 
     return {
         "timestamp": _now(),
-        "sensor"   : sensor,
-        "severity" : "CRITICAL",
-        "rule"     : "FAILURE_PROBABILITY",
-        "message"  : f"{sensor} failure probability is {probability*100:.0f}% — "
-                     f"failure risk high.",
-        "value"    : probability,
+        "sensor": sensor,
+        "severity": "CRITICAL",
+        "rule": "FAILURE_PROBABILITY",
+        "message": f"{sensor} failure probability is {probability*100:.0f}% — "
+        f"failure risk high.",
+        "value": probability,
     }
 
 
@@ -121,7 +122,7 @@ def _check_anomaly_detected(sensor: str, limit: int = 200) -> dict | None:
     try:
         result = detect_anomalies(sensor, limit=limit)
     except Exception:
-        return None   # not enough history yet to run anomaly detection
+        return None  # not enough history yet to run anomaly detection
 
     anomalies = result.get("anomalies", [])
     if not anomalies:
@@ -137,16 +138,17 @@ def _check_anomaly_detected(sensor: str, limit: int = 200) -> dict | None:
 
     return {
         "timestamp": _now(),
-        "sensor"   : sensor,
-        "severity" : "WARNING",
-        "rule"     : "ANOMALY_DETECTED",
-        "message"  : f"{sensor} latest reading ({latest_anomaly['value']}) "
-                     f"flagged as anomalous (score={latest_anomaly['score']}).",
-        "value"    : latest_anomaly["value"],
+        "sensor": sensor,
+        "severity": "WARNING",
+        "rule": "ANOMALY_DETECTED",
+        "message": f"{sensor} latest reading ({latest_anomaly['value']}) "
+        f"flagged as anomalous (score={latest_anomaly['score']}).",
+        "value": latest_anomaly["value"],
     }
 
 
 # ── Orchestration ──────────────────────────────────────────────────────────────
+
 
 def check_sensor_alerts(sensor: str, limit: int = 200) -> list[dict]:
     """
@@ -200,9 +202,9 @@ def get_alert_summary(limit: int = 200) -> dict:
         summary[a["severity"]] = summary.get(a["severity"], 0) + 1
 
     return {
-        "total"      : len(alerts),
+        "total": len(alerts),
         "by_severity": summary,
-        "alerts"     : alerts,
+        "alerts": alerts,
     }
 
 
@@ -225,5 +227,7 @@ if __name__ == "__main__":
             icon = {"CRITICAL": "🔴", "WARNING": "🟡", "INFO": "🟢"}[a["severity"]]
             print(f"  {icon} [{a['severity']}] {a['sensor']}: {a['message']}")
     else:
-        print("\nNo alerts — all sensors healthy, or insufficient data. "
-              "Run telemetry/collector.py first.")
+        print(
+            "\nNo alerts — all sensors healthy, or insufficient data. "
+            "Run telemetry/collector.py first."
+        )

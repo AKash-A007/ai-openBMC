@@ -40,7 +40,6 @@ from sklearn.ensemble import IsolationForest
 sys.path.append(str(Path(__file__).resolve().parent.parent / "telemetry"))
 from query import get_sensor_history, get_sensor_history_full  # noqa: E402
 
-
 # ── Config ────────────────────────────────────────────────────────────────────
 
 # contamination = the assumed proportion of anomalies in the data.
@@ -48,13 +47,14 @@ from query import get_sensor_history, get_sensor_history_full  # noqa: E402
 # not a hard rule; IsolationForest uses it to calibrate the decision
 # boundary between normal and anomalous scores.
 DEFAULT_CONTAMINATION = 0.05
-RANDOM_STATE          = 42   # fixed seed → reproducible results across runs
+RANDOM_STATE = 42  # fixed seed → reproducible results across runs
 
 # Model cache — avoid retraining on every single call within a session
 _model_cache: dict[str, IsolationForest] = {}
 
 
 # ── Step 1: Reshape data for sklearn ──────────────────────────────────────────
+
 
 def _prepare_data(values: list[float]) -> np.ndarray:
     """
@@ -69,6 +69,7 @@ def _prepare_data(values: list[float]) -> np.ndarray:
 
 
 # ── Step 2: Train ──────────────────────────────────────────────────────────────
+
 
 def train_model(
     sensor: str,
@@ -119,6 +120,7 @@ def _get_or_train_model(sensor: str, limit: int = 200) -> IsolationForest:
 
 # ── Step 3: Predict ────────────────────────────────────────────────────────────
 
+
 def detect_anomalies(sensor: str, limit: int = 200) -> dict:
     """
     Run anomaly detection on a sensor's recent history.
@@ -137,14 +139,14 @@ def detect_anomalies(sensor: str, limit: int = 200) -> dict:
 
     if len(values) < 10:
         return {
-            "sensor"        : sensor,
+            "sensor": sensor,
             "total_readings": len(values),
-            "anomaly_count" : 0,
-            "anomalies"     : [],
-            "message"       : "Not enough history yet — need at least 10 readings.",
+            "anomaly_count": 0,
+            "anomalies": [],
+            "message": "Not enough history yet — need at least 10 readings.",
         }
 
-    data  = _prepare_data(values)
+    data = _prepare_data(values)
     model = _get_or_train_model(sensor, limit=limit)
 
     # predict() → 1 for normal (inlier), -1 for anomaly (outlier)
@@ -158,21 +160,24 @@ def detect_anomalies(sensor: str, limit: int = 200) -> dict:
     anomalies = []
     for i, (value, pred, score) in enumerate(zip(values, predictions, scores)):
         if pred == -1:
-            anomalies.append({
-                "value": float(value),
-                "score": round(float(score), 4),
-                "index": i,
-            })
+            anomalies.append(
+                {
+                    "value": float(value),
+                    "score": round(float(score), 4),
+                    "index": i,
+                }
+            )
 
     return {
-        "sensor"        : sensor,
+        "sensor": sensor,
         "total_readings": len(values),
-        "anomaly_count" : len(anomalies),
-        "anomalies"     : anomalies,
+        "anomaly_count": len(anomalies),
+        "anomalies": anomalies,
     }
 
 
 # ── Step 4: Score a single new reading against the trained model ─────────────
+
 
 def get_anomaly_score(sensor: str, value: float, limit: int = 200) -> dict:
     """
@@ -202,9 +207,9 @@ def get_anomaly_score(sensor: str, value: float, limit: int = 200) -> dict:
     """
     model = _get_or_train_model(sensor, limit=limit)
 
-    data       = _prepare_data([value])
+    data = _prepare_data([value])
     prediction = model.predict(data)[0]
-    score      = float(model.decision_function(data)[0])
+    score = float(model.decision_function(data)[0])
 
     status = "ANOMALY" if prediction == -1 else "NORMAL"
 
@@ -212,7 +217,7 @@ def get_anomaly_score(sensor: str, value: float, limit: int = 200) -> dict:
     # isolation score saturates and can't distinguish "150" from "500".
     baseline_values = get_sensor_history(sensor, limit=limit)
     mean = float(np.mean(baseline_values))
-    std  = float(np.std(baseline_values)) or 1.0   # avoid divide-by-zero
+    std = float(np.std(baseline_values)) or 1.0  # avoid divide-by-zero
     z_distance = abs(value - mean) / std
 
     if status == "NORMAL":
@@ -225,15 +230,16 @@ def get_anomaly_score(sensor: str, value: float, limit: int = 200) -> dict:
         severity = "HIGH"
 
     return {
-        "sensor"  : sensor,
-        "value"   : value,
-        "status"  : status,
-        "score"   : round(score, 4),
+        "sensor": sensor,
+        "value": value,
+        "status": status,
+        "score": round(score, 4),
         "severity": severity,
     }
 
 
 # ── Step 5: Full health snapshot (for dashboard integration) ─────────────────
+
 
 def get_sensor_health(sensor: str, limit: int = 200) -> dict:
     """
@@ -261,13 +267,13 @@ def get_sensor_health(sensor: str, limit: int = 200) -> dict:
     full_scan = detect_anomalies(sensor, limit=limit)
 
     return {
-        "sensor"               : sensor,
-        "latest_value"         : latest["value"],
-        "latest_timestamp"     : latest["timestamp"],
-        "status"               : result["status"],
-        "score"                : result["score"],
-        "severity"             : result["severity"],
-        "recent_anomaly_count" : full_scan["anomaly_count"],
+        "sensor": sensor,
+        "latest_value": latest["value"],
+        "latest_timestamp": latest["timestamp"],
+        "status": result["status"],
+        "score": result["score"],
+        "severity": result["severity"],
+        "recent_anomaly_count": full_scan["anomaly_count"],
     }
 
 
@@ -298,12 +304,12 @@ if __name__ == "__main__":
     demo_values = [70, 72, 71, 73, 74, 75, 150]
     print(f"Input values: {demo_values}")
 
-    data  = _prepare_data(demo_values)
+    data = _prepare_data(demo_values)
     model = IsolationForest(contamination=0.15, random_state=RANDOM_STATE)
     model.fit(data)
 
     predictions = model.predict(data)
-    scores      = model.decision_function(data)
+    scores = model.decision_function(data)
 
     print(f"\nPredictions: {list(predictions)}   (1=normal, -1=anomaly)")
     print(f"Scores     : {[round(s, 3) for s in scores]}")

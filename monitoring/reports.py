@@ -24,13 +24,13 @@ sys.path.append(str(Path(__file__).resolve().parent.parent / "telemetry"))
 sys.path.append(str(Path(__file__).resolve().parent.parent / "analytics"))
 sys.path.append(str(Path(__file__).resolve().parent))
 
-from query import get_all_sensor_names                       # noqa: E402
+from query import get_all_sensor_names  # noqa: E402
 from database import fetch_recent_diagnoses, count_diagnoses  # noqa: E402
-from metrics import get_system_metrics                        # noqa: E402
-from alerts import get_alert_summary                          # noqa: E402
-
+from metrics import get_system_metrics  # noqa: E402
+from alerts import get_alert_summary  # noqa: E402
 
 # ── RCA history helpers ────────────────────────────────────────────────────────
+
 
 def get_recent_diagnoses(limit: int = 10) -> list[dict]:
     """
@@ -40,8 +40,8 @@ def get_recent_diagnoses(limit: int = 10) -> list[dict]:
     rows = fetch_recent_diagnoses(limit=limit)
     return [
         {
-            "timestamp" : row["timestamp"],
-            "sensor"    : row["sensor"],
+            "timestamp": row["timestamp"],
+            "sensor": row["sensor"],
             "root_cause": row["root_cause"],
             "confidence": row["confidence"],
         }
@@ -71,9 +71,9 @@ def get_most_frequent_issue(limit: int = 100) -> dict | None:
     top_cause, top_count = counts.most_common(1)[0]
 
     return {
-        "root_cause" : top_cause,
+        "root_cause": top_cause,
         "occurrences": top_count,
-        "out_of"     : len(diagnoses),
+        "out_of": len(diagnoses),
     }
 
 
@@ -100,7 +100,10 @@ def get_recurring_problems(limit: int = 100, min_occurrences: int = 2) -> list[d
 
 # ── Weekly report ──────────────────────────────────────────────────────────────
 
-def generate_weekly_report(diagnosis_limit: int = 100, telemetry_limit: int = 200) -> dict:
+
+def generate_weekly_report(
+    diagnosis_limit: int = 100, telemetry_limit: int = 200
+) -> dict:
     """
     Combine system metrics, alert counts, and diagnosis history into
     a single summary report — the function a scheduled job (cron, or
@@ -121,21 +124,21 @@ def generate_weekly_report(diagnosis_limit: int = 100, telemetry_limit: int = 20
         }
     """
     metrics_summary = get_system_metrics(limit=telemetry_limit)
-    alert_summary   = get_alert_summary(limit=telemetry_limit)
-    top_issue       = get_most_frequent_issue(limit=diagnosis_limit)
-    recurring       = get_recurring_problems(limit=diagnosis_limit)
+    alert_summary = get_alert_summary(limit=telemetry_limit)
+    top_issue = get_most_frequent_issue(limit=diagnosis_limit)
+    recurring = get_recurring_problems(limit=diagnosis_limit)
 
     return {
-        "avg_health"              : metrics_summary["overall_health"],
-        "overall_risk"            : metrics_summary["overall_risk"],
-        "failure_rate"            : metrics_summary["failure_rate"],
-        "total_alerts"            : alert_summary["total"],
-        "critical_alerts"         : alert_summary["by_severity"]["CRITICAL"],
-        "warning_alerts"          : alert_summary["by_severity"]["WARNING"],
-        "top_issue"               : top_issue,
-        "recurring_problems"      : recurring,
+        "avg_health": metrics_summary["overall_health"],
+        "overall_risk": metrics_summary["overall_risk"],
+        "failure_rate": metrics_summary["failure_rate"],
+        "total_alerts": alert_summary["total"],
+        "critical_alerts": alert_summary["by_severity"]["CRITICAL"],
+        "warning_alerts": alert_summary["by_severity"]["WARNING"],
+        "top_issue": top_issue,
+        "recurring_problems": recurring,
         "total_diagnoses_recorded": count_diagnoses(),
-        "sensors_tracked"         : get_all_sensor_names(),
+        "sensors_tracked": get_all_sensor_names(),
     }
 
 
@@ -157,8 +160,12 @@ if __name__ == "__main__":
     diagnoses = get_recent_diagnoses(limit=5)
     if diagnoses:
         for d in diagnoses:
-            print(f"  [{d['timestamp']}] {d['sensor']}: {d['root_cause']} "
-                  f"(confidence={d['confidence']})")
+            print(
+                f"  [{d['timestamp']}] {d['sensor']}: {d['root_cause']} "
+                f"(confidence={d['confidence']})"
+            )
     else:
-        print("  No diagnoses recorded yet — call database.insert_diagnosis() "
-              "from agent.py whenever a diagnosis completes.")
+        print(
+            "  No diagnoses recorded yet — call database.insert_diagnosis() "
+            "from agent.py whenever a diagnosis completes."
+        )

@@ -1,0 +1,21 @@
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | __pycache__
+  | chroma_db
+  | telemetry/db
+)/
+'''
+
+[tool.flake8]
+max-line-length = 88
+exclude = [".git", "__pycache__", ".venv", "chroma_db"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true

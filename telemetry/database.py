@@ -1,7 +1,8 @@
-# this is for the database  == all database operations 
+# this is for the database  == all database operations
 """
-    never write SQL queries in different files
+never write SQL queries in different files
 """
+
 """
     Why did you add SQLite?
     The diagnosis agent in Phase A was stateless and only analyzed current events. To support anomaly detection and predictive maintenance,
@@ -24,7 +25,8 @@
 import sqlite3
 from pathlib import Path
 from contextlib import contextmanager
-# schema i want to use 
+
+# schema i want to use
 """
     CREATE TABLE telemetry(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,18 +36,18 @@ from contextlib import contextmanager
     status TEXT
 );
 """
-#define path 
+# define path
 # DB_PATH = Path("db/telemetry.db")
 # #ensure the directory exists
 # DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-# #create the connection 
+# #create the connection
 # def get_connection():
 #     conn = sqlite3.connect(DB_PATH)
 #     return conn
 
-#initialize the database with the schema
+# initialize the database with the schema
 # def init_db():
-#     #make connection 
+#     #make connection
 #     conn = get_connection()
 #     #create a cursor and execute the schema creation query
 #     #Cursor acts like a SQL command executor. It allows you to execute SQL commands and queries against the database.
@@ -62,7 +64,7 @@ from contextlib import contextmanager
 #     conn.commit()
 #     conn.close()
 
-#function to insert the telemetry data into the database
+# function to insert the telemetry data into the database
 # def insert_telemetry(timestamp, sensor, value, status):
 #     conn = get_connection()
 #     cursor = conn.cursor()
@@ -98,7 +100,7 @@ Parameterized Query
 
 Industry standard."""
 
-#query latest records
+# query latest records
 # def get_latest(limit=10):
 #     conn = get_connection()
 #     cursor = conn.cursor()
@@ -123,7 +125,7 @@ Industry standard."""
 #     """
 #     Context manager for SQLite connections.
 #     Ensures connections are always closed, even if an error occurs.
- 
+
 #     Usage:
 #         with get_connection() as conn:
 #             conn.execute(...)
@@ -163,9 +165,9 @@ Industry standard."""
 #             ON telemetry (sensor, timestamp);
 #         """)
 #     print(f"[DB] Initialised at {DB_PATH}")
- 
+
 #  # ── Insert ──────────────────────────────────────────────────────────────────
- 
+
 # def insert_reading(timestamp: str, sensor: str, value: float, status: str) -> int:
 #     """
 #     Insert a single telemetry reading.
@@ -180,13 +182,13 @@ Industry standard."""
 #             (timestamp, sensor, value, status),
 #         )
 #         return cursor.lastrowid
- 
- 
+
+
 # def insert_readings_batch(readings: list[dict]) -> int:
 #     """
 #     Insert multiple readings in one transaction — faster than calling
 #     insert_reading() in a loop because it avoids repeated commits.
- 
+
 #     readings: [{"timestamp": ..., "sensor": ..., "value": ..., "status": ...}, ...]
 #     Returns the number of rows inserted.
 #     """
@@ -199,17 +201,17 @@ Industry standard."""
 #             readings,
 #         )
 #         return len(readings)
- 
- 
+
+
 # # ── Query (raw — query.py wraps these with friendlier functions) ───────────
- 
+
 # def fetch_all() -> list[sqlite3.Row]:
 #     """Return every row in the telemetry table. Use sparingly — table grows fast."""
 #     with get_connection() as conn:
 #         cursor = conn.execute("SELECT * FROM telemetry ORDER BY id ASC")
 #         return cursor.fetchall()
- 
- 
+
+
 # def fetch_by_sensor(sensor: str, limit: int = 100) -> list[sqlite3.Row]:
 #     """
 #     Return the most recent `limit` readings for a given sensor,
@@ -229,24 +231,24 @@ Industry standard."""
 #             (sensor, limit),
 #         )
 #         return cursor.fetchall()
- 
- 
+
+
 # def count_rows() -> int:
 #     """Return total number of telemetry rows stored."""
 #     with get_connection() as conn:
 #         cursor = conn.execute("SELECT COUNT(*) as count FROM telemetry")
 #         return cursor.fetchone()["count"]
- 
- 
+
+
 # def clear_table() -> None:
 #     """Wipe all telemetry data. Use for testing only."""
 #     with get_connection() as conn:
 #         conn.execute("DELETE FROM telemetry")
 #     print("[DB] Telemetry table cleared.")
- 
- 
+
+
 # # ── Self-test ───────────────────────────────────────────────────────────────
- 
+
 # if __name__ == "__main__":
 #     init_db()
 #     print(f"[DB] Current row count: {count_rows()}")
@@ -279,12 +281,13 @@ except ImportError:
 
 # ── Constants ───────────────────────────────────────────────────────────────
 
-DB_DIR  = Path(__file__).resolve().parent.parent / "db"
+DB_DIR = Path(__file__).resolve().parent.parent / "db"
 DB_PATH = DB_DIR / "telemetry.db"
 DB_TYPE = os.getenv("DB_TYPE", "sqlite").lower()
 
 
 # ── Compatible Interface for SQLite & PostgreSQL ─────────────────────────────
+
 
 class CompatibleRow:
     def __init__(self, dict_row):
@@ -318,16 +321,18 @@ class CompatibleCursor:
             params = ()
         if self.is_postgres:
             import re
+
             sql = sql.replace("?", "%s")
-            sql = re.sub(r':(\w+)', r'%(\1)s', sql)
+            sql = re.sub(r":(\w+)", r"%(\1)s", sql)
         self.cursor.execute(sql, params)
         return self
 
     def executemany(self, sql, params_list):
         if self.is_postgres:
             import re
+
             sql = sql.replace("?", "%s")
-            sql = re.sub(r':(\w+)', r'%(\1)s', sql)
+            sql = re.sub(r":(\w+)", r"%(\1)s", sql)
         self.cursor.executemany(sql, params_list)
         return self
 
@@ -360,7 +365,9 @@ class CompatibleConnection:
 
     def cursor(self):
         if self.is_postgres:
-            return CompatibleCursor(self.conn.cursor(cursor_factory=RealDictCursor), is_postgres=True)
+            return CompatibleCursor(
+                self.conn.cursor(cursor_factory=RealDictCursor), is_postgres=True
+            )
         return CompatibleCursor(self.conn.cursor(), is_postgres=False)
 
     def execute(self, sql, params=None):
@@ -395,6 +402,7 @@ class CompatibleConnection:
 
 # ── Connection management ──────────────────────────────────────────────────
 
+
 def get_connection():
     """
     Returns a unified connection wrapper for SQLite or PostgreSQL.
@@ -404,18 +412,16 @@ def get_connection():
     """
     if DB_TYPE == "postgres":
         if psycopg2 is None:
-            raise ImportError("psycopg2 is not installed but DB_TYPE=postgres was specified.")
+            raise ImportError(
+                "psycopg2 is not installed but DB_TYPE=postgres was specified."
+            )
         host = os.getenv("DB_HOST", "localhost")
         port = os.getenv("DB_PORT", "5432")
         user = os.getenv("DB_USER", "postgres")
         password = os.getenv("DB_PASSWORD", "postgres")
         dbname = os.getenv("DB_NAME", "telemetry")
         raw_conn = psycopg2.connect(
-            host=host,
-            port=port,
-            user=user,
-            password=password,
-            dbname=dbname
+            host=host, port=port, user=user, password=password, dbname=dbname
         )
         return CompatibleConnection(raw_conn, is_postgres=True)
     else:
@@ -426,6 +432,7 @@ def get_connection():
 
 
 # ── Schema ──────────────────────────────────────────────────────────────────
+
 
 def init_db() -> None:
     """
@@ -556,7 +563,10 @@ def init_db() -> None:
 
 # ── Diagnoses table operations ────────────────────────────────────────────────
 
-def insert_diagnosis(timestamp: str, sensor: str, root_cause: str, confidence: float) -> int:
+
+def insert_diagnosis(
+    timestamp: str, sensor: str, root_cause: str, confidence: float
+) -> int:
     """
     Record a single diagnosis result (e.g. from Phase A's RAG+LLM agent,
     or any future predictor) into permanent RCA history.
@@ -602,6 +612,7 @@ def count_diagnoses() -> int:
 
 # ── Insert ──────────────────────────────────────────────────────────────────
 
+
 def insert_reading(timestamp: str, sensor: str, value: float, status: str) -> int:
     """
     Insert a single telemetry reading.
@@ -638,6 +649,7 @@ def insert_readings_batch(readings: list[dict]) -> int:
 
 
 # ── Query (raw — query.py wraps these with friendlier functions) ───────────
+
 
 def fetch_all() -> list[sqlite3.Row]:
     """Return every row in the telemetry table. Use sparingly — table grows fast."""

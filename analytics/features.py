@@ -26,8 +26,8 @@ Why this file exists:
 
 import numpy as np
 
-
 # ── Core feature extraction ───────────────────────────────────────────────────
+
 
 def extract_features(values: list[float]) -> dict:
     """
@@ -53,23 +53,28 @@ def extract_features(values: list[float]) -> dict:
     """
     if not values:
         return {
-            "mean": 0.0, "max": 0.0, "min": 0.0,
-            "std": 0.0, "trend": 0.0, "count": 0,
+            "mean": 0.0,
+            "max": 0.0,
+            "min": 0.0,
+            "std": 0.0,
+            "trend": 0.0,
+            "count": 0,
         }
 
     arr = np.array(values, dtype=float)
 
     return {
-        "mean" : round(float(np.mean(arr)), 3),
-        "max"  : round(float(np.max(arr)), 3),
-        "min"  : round(float(np.min(arr)), 3),
-        "std"  : round(float(np.std(arr)), 3),
+        "mean": round(float(np.mean(arr)), 3),
+        "max": round(float(np.max(arr)), 3),
+        "min": round(float(np.min(arr)), 3),
+        "std": round(float(np.std(arr)), 3),
         "trend": round(calculate_trend(values), 3),
         "count": len(values),
     }
 
 
 # ── Trend calculation ──────────────────────────────────────────────────────────
+
 
 def calculate_trend(values: list[float]) -> float:
     """
@@ -139,4 +144,4 @@ if __name__ == "__main__":
     mixed = [74, 75, 74, 75, 74, 75, 74, 80, 88, 96]
     print(f"Input: {mixed}")
     print(f"Full-history trend : {calculate_trend(mixed):.3f}")
-    print(f"Recent (last 5) ROC: {calculate_rate_of_change(mixed, window=5):.3f}")  
+    print(f"Recent (last 5) ROC: {calculate_rate_of_change(mixed, window=5):.3f}")

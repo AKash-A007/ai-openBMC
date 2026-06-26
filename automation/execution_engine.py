@@ -43,8 +43,7 @@ from action_executor import (
     switch_to_redundant_psu,
 )
 from rollback_manager import RollbackManager
-from audit_logger     import AuditLogger
-
+from audit_logger import AuditLogger
 
 # ── Action map ────────────────────────────────────────────────────────────────
 # Maps the action string (from agent.diagnose recommendation field) to
@@ -54,21 +53,22 @@ from audit_logger     import AuditLogger
 # and the recommendation strings your LLM returns.
 
 ACTION_MAP: dict[str, callable] = {
-    "Increase Fan Speed"      : increase_fan_speed,
-    "Reduce Fan Speed"        : reduce_fan_speed,
-    "Restart Service"         : restart_service,
-    "Reduce CPU Frequency"    : reduce_cpu_frequency,
-    "Enable CPU Throttling"   : enable_cpu_throttling,
-    "Isolate Memory Bank"     : isolate_memory_bank,
-    "Power Cycle Node"        : power_cycle_node,
-    "Shutdown System"         : shutdown_system,
-    "Emergency Shutdown"      : emergency_shutdown,
-    "Check PSU Voltage"       : check_psu_voltage,
-    "Switch to Redundant PSU" : switch_to_redundant_psu,
+    "Increase Fan Speed": increase_fan_speed,
+    "Reduce Fan Speed": reduce_fan_speed,
+    "Restart Service": restart_service,
+    "Reduce CPU Frequency": reduce_cpu_frequency,
+    "Enable CPU Throttling": enable_cpu_throttling,
+    "Isolate Memory Bank": isolate_memory_bank,
+    "Power Cycle Node": power_cycle_node,
+    "Shutdown System": shutdown_system,
+    "Emergency Shutdown": emergency_shutdown,
+    "Check PSU Voltage": check_psu_voltage,
+    "Switch to Redundant PSU": switch_to_redundant_psu,
 }
 
 
 # ── ExecutionEngine ───────────────────────────────────────────────────────────
+
 
 class ExecutionEngine:
     """
@@ -89,19 +89,19 @@ class ExecutionEngine:
 
     def __init__(self) -> None:
         self._rollback = RollbackManager()
-        self._audit    = AuditLogger()
+        self._audit = AuditLogger()
 
     # ── Execute ───────────────────────────────────────────────────────────────
 
     def execute(
         self,
-        action      : str,
-        issue       : str,
-        sensor      : str  = "UNKNOWN",
-        severity    : str  = "UNKNOWN",
-        policy      : str  = "AUTO",
-        executed_by : str  = "auto",
-        metadata    : dict | None = None,
+        action: str,
+        issue: str,
+        sensor: str = "UNKNOWN",
+        severity: str = "UNKNOWN",
+        policy: str = "AUTO",
+        executed_by: str = "auto",
+        metadata: dict | None = None,
     ) -> dict:
         """
         Execute an approved remediation action.
@@ -121,8 +121,8 @@ class ExecutionEngine:
         """
         # Build context for the executor function
         context = {
-            "issue"   : issue,
-            "sensor"  : sensor,
+            "issue": issue,
+            "sensor": sensor,
             "severity": severity,
             **(metadata or {}),
         }
@@ -136,33 +136,55 @@ class ExecutionEngine:
             )
             print(f"[ExecutionEngine] ERROR: {msg}")
             audit_id = self._audit.log(
-                issue=issue, action=action, status="FAILED",
-                executed_by=executed_by, policy=policy,
-                sensor=sensor, severity=severity, details=msg,
+                issue=issue,
+                action=action,
+                status="FAILED",
+                executed_by=executed_by,
+                policy=policy,
+                sensor=sensor,
+                severity=severity,
+                details=msg,
             )
             return self._make_result(
-                action=action, status="FAILED", success=False,
-                details=msg, rollback=None,
-                executed_by=executed_by, policy=policy, audit_id=audit_id,
+                action=action,
+                status="FAILED",
+                success=False,
+                details=msg,
+                rollback=None,
+                executed_by=executed_by,
+                policy=policy,
+                audit_id=audit_id,
             )
 
         # ── Run the action ────────────────────────────────────────────────────
-        print(f"[ExecutionEngine] Starting: '{action}' | issue={issue} | by={executed_by}")
+        print(
+            f"[ExecutionEngine] Starting: '{action}' | issue={issue} | by={executed_by}"
+        )
         exec_result = executor(context)
         duration_ms = exec_result.get("duration_ms", 0)
 
         if exec_result["success"]:
             # ── Happy path ────────────────────────────────────────────────────
             audit_id = self._audit.log(
-                issue=issue, action=action, status="SUCCESS",
-                executed_by=executed_by, policy=policy,
-                sensor=sensor, severity=severity,
-                details=exec_result["details"], duration_ms=duration_ms,
+                issue=issue,
+                action=action,
+                status="SUCCESS",
+                executed_by=executed_by,
+                policy=policy,
+                sensor=sensor,
+                severity=severity,
+                details=exec_result["details"],
+                duration_ms=duration_ms,
             )
             return self._make_result(
-                action=action, status="SUCCESS", success=True,
-                details=exec_result["details"], rollback=None,
-                executed_by=executed_by, policy=policy, audit_id=audit_id,
+                action=action,
+                status="SUCCESS",
+                success=True,
+                details=exec_result["details"],
+                rollback=None,
+                executed_by=executed_by,
+                policy=policy,
+                audit_id=audit_id,
                 duration_ms=duration_ms,
             )
 
@@ -172,22 +194,31 @@ class ExecutionEngine:
             rb_result = self._rollback.rollback(action, context)
 
             final_status = {
-                "ROLLED_BACK"     : "ROLLED_BACK",
-                "ROLLBACK_FAILED" : "ROLLBACK_FAILED",
-                "NO_ROLLBACK"     : "NO_ROLLBACK",
+                "ROLLED_BACK": "ROLLED_BACK",
+                "ROLLBACK_FAILED": "ROLLBACK_FAILED",
+                "NO_ROLLBACK": "NO_ROLLBACK",
             }.get(rb_result["status"], "FAILED")
 
             audit_id = self._audit.log(
-                issue=issue, action=action, status=final_status,
-                executed_by=executed_by, policy=policy,
-                sensor=sensor, severity=severity,
+                issue=issue,
+                action=action,
+                status=final_status,
+                executed_by=executed_by,
+                policy=policy,
+                sensor=sensor,
+                severity=severity,
                 details=f"{exec_result['details']} | Rollback: {rb_result['details']}",
                 duration_ms=duration_ms,
             )
             return self._make_result(
-                action=action, status=final_status, success=False,
-                details=exec_result["details"], rollback=rb_result,
-                executed_by=executed_by, policy=policy, audit_id=audit_id,
+                action=action,
+                status=final_status,
+                success=False,
+                details=exec_result["details"],
+                rollback=rb_result,
+                executed_by=executed_by,
+                policy=policy,
+                audit_id=audit_id,
                 duration_ms=duration_ms,
             )
 
@@ -195,27 +226,27 @@ class ExecutionEngine:
 
     @staticmethod
     def _make_result(
-        action      : str,
-        status      : str,
-        success     : bool,
-        details     : str,
-        rollback    : dict | None,
-        executed_by : str,
-        policy      : str,
-        audit_id    : int,
-        duration_ms : float = 0.0,
+        action: str,
+        status: str,
+        success: bool,
+        details: str,
+        rollback: dict | None,
+        executed_by: str,
+        policy: str,
+        audit_id: int,
+        duration_ms: float = 0.0,
     ) -> dict:
         return {
-            "action"      : action,
-            "status"      : status,
-            "success"     : success,
-            "details"     : details,
-            "rollback"    : rollback,
-            "executed_by" : executed_by,
-            "policy"      : policy,
-            "audit_id"    : audit_id,
-            "duration_ms" : duration_ms,
-            "timestamp"   : datetime.now(timezone.utc).isoformat(),
+            "action": action,
+            "status": status,
+            "success": success,
+            "details": details,
+            "rollback": rollback,
+            "executed_by": executed_by,
+            "policy": policy,
+            "audit_id": audit_id,
+            "duration_ms": duration_ms,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     def list_supported_actions(self) -> list[str]:
@@ -233,12 +264,12 @@ if __name__ == "__main__":
     print()
 
     result = engine.execute(
-        action      = "Increase Fan Speed",
-        issue       = "CPU_OVERHEAT",
-        sensor      = "CPU0",
-        severity    = "CRITICAL",
-        policy      = "AUTO",
-        executed_by = "auto",
+        action="Increase Fan Speed",
+        issue="CPU_OVERHEAT",
+        sensor="CPU0",
+        severity="CRITICAL",
+        policy="AUTO",
+        executed_by="auto",
     )
     print(f"\nResult status : {result['status']}")
     print(f"Audit row id  : {result['audit_id']}")

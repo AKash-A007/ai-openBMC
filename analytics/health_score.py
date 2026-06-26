@@ -27,8 +27,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent / "telemetry"))
 
-from predictor import predict_failure, predict_all   # noqa: E402
-
+from predictor import predict_failure, predict_all  # noqa: E402
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -39,12 +38,13 @@ STARTING_SCORE = 100
 # a single anomaly alone tanking the score to zero (one outlier shouldn't
 # read as "the machine is dying").
 ANOMALY_PENALTY_PER_COUNT = 10
-ANOMALY_PENALTY_CAP       = 40     # don't let anomaly count alone zero out the score
-TREND_PENALTY_MULTIPLIER  = 5      # per unit of trend factor contribution
-PROBABILITY_PENALTY_SCALE = 60     # failure_probability=1.0 → -60 points
+ANOMALY_PENALTY_CAP = 40  # don't let anomaly count alone zero out the score
+TREND_PENALTY_MULTIPLIER = 5  # per unit of trend factor contribution
+PROBABILITY_PENALTY_SCALE = 60  # failure_probability=1.0 → -60 points
 
 
 # ── Core scoring ───────────────────────────────────────────────────────────────
+
 
 def calculate_health_score(sensor: str, limit: int = 200) -> dict:
     """
@@ -73,11 +73,11 @@ def calculate_health_score(sensor: str, limit: int = 200) -> dict:
     if "message" in prediction:
         # Not enough data yet — report neutral, not falsely healthy or unhealthy
         return {
-            "sensor"             : sensor,
-            "health_score"       : None,
+            "sensor": sensor,
+            "health_score": None,
             "failure_probability": 0.0,
-            "risk"               : "UNKNOWN",
-            "message"            : prediction["message"],
+            "risk": "UNKNOWN",
+            "message": prediction["message"],
         }
 
     factors = prediction["contributing_factors"]
@@ -87,10 +87,17 @@ def calculate_health_score(sensor: str, limit: int = 200) -> dict:
     # "count-equivalent" for an intuitive penalty (anomaly_factor of 0.3
     # means "at or above the danger count", so apply the full per-anomaly
     # penalty cap)
-    anomaly_penalty = round(min(
-        (factors["anomaly_count"] / 0.3) * ANOMALY_PENALTY_PER_COUNT,
-        ANOMALY_PENALTY_CAP,
-    ), 2) if factors["anomaly_count"] > 0 else 0.0
+    anomaly_penalty = (
+        round(
+            min(
+                (factors["anomaly_count"] / 0.3) * ANOMALY_PENALTY_PER_COUNT,
+                ANOMALY_PENALTY_CAP,
+            ),
+            2,
+        )
+        if factors["anomaly_count"] > 0
+        else 0.0
+    )
 
     trend_penalty = round(factors["trend"] * TREND_PENALTY_MULTIPLIER, 2)
 
@@ -99,16 +106,16 @@ def calculate_health_score(sensor: str, limit: int = 200) -> dict:
     )
 
     total_penalty = anomaly_penalty + trend_penalty + probability_penalty
-    health_score  = max(0, min(STARTING_SCORE, round(STARTING_SCORE - total_penalty)))
+    health_score = max(0, min(STARTING_SCORE, round(STARTING_SCORE - total_penalty)))
 
     return {
-        "sensor"              : sensor,
-        "health_score"        : health_score,
-        "failure_probability" : prediction["failure_probability"],
-        "risk"                : prediction["risk"],
-        "penalties"           : {
-            "anomaly"    : anomaly_penalty,
-            "trend"      : trend_penalty,
+        "sensor": sensor,
+        "health_score": health_score,
+        "failure_probability": prediction["failure_probability"],
+        "risk": prediction["risk"],
+        "penalties": {
+            "anomaly": anomaly_penalty,
+            "trend": trend_penalty,
             "probability": probability_penalty,
         },
     }
@@ -124,7 +131,7 @@ def calculate_fleet_health(sensors: list[str], limit: int = 200) -> dict:
     rather than treated as a 0 or 100 — neither would be honest.
     """
     per_sensor = {}
-    scored     = []
+    scored = []
 
     for sensor in sensors:
         result = calculate_health_score(sensor, limit=limit)
@@ -144,8 +151,8 @@ def calculate_fleet_health(sensors: list[str], limit: int = 200) -> dict:
 
     return {
         "overall_health_score": overall,
-        "overall_risk"        : worst_risk,
-        "sensors"             : per_sensor,
+        "overall_risk": worst_risk,
+        "sensors": per_sensor,
     }
 
 

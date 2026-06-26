@@ -29,23 +29,22 @@ app.add_middleware(
 
 # Prometheus Gauges for observability
 HEALTH_SCORE_GAUGE = Gauge(
-    "aiops_health_score", 
-    "Current fleet health score (0-100)", 
-    ["sensor"]
+    "aiops_health_score", "Current fleet health score (0-100)", ["sensor"]
 )
 FAILURE_PROB_GAUGE = Gauge(
-    "aiops_failure_probability", 
-    "Failure probability of sensor (0.0-1.0)", 
-    ["sensor"]
+    "aiops_failure_probability", "Failure probability of sensor (0.0-1.0)", ["sensor"]
 )
+
 
 @app.on_event("startup")
 def startup():
     init_db()
 
+
 @app.get("/health")
 def health():
     return {"status": "healthy"}
+
 
 @app.get("/anomalies/{sensor}")
 def get_anomalies(sensor: str):
@@ -55,6 +54,7 @@ def get_anomalies(sensor: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/predictions")
 def get_predictions():
     try:
@@ -62,15 +62,18 @@ def get_predictions():
         if not sensors:
             return {"predictions": {}}
         predictions = predict_all(sensors)
-        
+
         # Update metrics for Prometheus
         for sensor, pred in predictions.items():
             if "failure_probability" in pred:
-                FAILURE_PROB_GAUGE.labels(sensor=sensor).set(pred["failure_probability"])
-                
+                FAILURE_PROB_GAUGE.labels(sensor=sensor).set(
+                    pred["failure_probability"]
+                )
+
         return {"predictions": predictions}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/health-score")
 def get_health_score():
@@ -79,19 +82,22 @@ def get_health_score():
         if not sensors:
             return {"overall_health_score": 100.0, "breakdown": {}}
         fleet_health = calculate_fleet_health(sensors)
-        
+
         # Update metrics for Prometheus
         overall = fleet_health.get("overall_health_score", 100.0)
-        HEALTH_SCORE_GAUGE.labels(sensor="fleet").set(overall if overall is not None else 100.0)
-        
+        HEALTH_SCORE_GAUGE.labels(sensor="fleet").set(
+            overall if overall is not None else 100.0
+        )
+
         for sensor, score_data in fleet_health.get("sensors", {}).items():
             score = score_data.get("health_score")
             if score is not None:
                 HEALTH_SCORE_GAUGE.labels(sensor=sensor).set(score)
-                
+
         return fleet_health
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/metrics")
 def metrics():
@@ -101,23 +107,30 @@ def metrics():
         if sensors:
             fleet_health = calculate_fleet_health(sensors)
             overall = fleet_health.get("overall_health_score", 100.0)
-            HEALTH_SCORE_GAUGE.labels(sensor="fleet").set(overall if overall is not None else 100.0)
+            HEALTH_SCORE_GAUGE.labels(sensor="fleet").set(
+                overall if overall is not None else 100.0
+            )
             for sensor, score_data in fleet_health.get("sensors", {}).items():
                 score = score_data.get("health_score")
                 if score is not None:
                     HEALTH_SCORE_GAUGE.labels(sensor=sensor).set(score)
-                
+
             predictions = predict_all(sensors)
             for sensor, pred in predictions.items():
                 if "failure_probability" in pred:
-                    FAILURE_PROB_GAUGE.labels(sensor=sensor).set(pred["failure_probability"])
+                    FAILURE_PROB_GAUGE.labels(sensor=sensor).set(
+                        pred["failure_probability"]
+                    )
     except Exception:
         pass
-        
+
     from fastapi.responses import Response
+
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
 
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.getenv("PORT", "8001"))
     uvicorn.run(app, host="0.0.0.0", port=port)

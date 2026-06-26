@@ -43,11 +43,11 @@ That's it — the rest of the pipeline picks it up automatically.
 
 from enum import Enum
 
-
 # ── Policy level enum ─────────────────────────────────────────────────────────
 
+
 class ApprovalMode(str, Enum):
-    AUTO   = "AUTO"    # execute immediately
+    AUTO = "AUTO"  # execute immediately
     MANUAL = "MANUAL"  # wait for human approval
 
 
@@ -60,27 +60,22 @@ class ApprovalMode(str, Enum):
 
 POLICIES: dict[str, ApprovalMode] = {
     # ── Fan / thermal management (safe — purely additive) ─────────────────
-    "Increase Fan Speed"         : ApprovalMode.AUTO,
-    "Reduce Fan Speed"           : ApprovalMode.AUTO,
-
+    "Increase Fan Speed": ApprovalMode.AUTO,
+    "Reduce Fan Speed": ApprovalMode.AUTO,
     # ── Service-level remediations ────────────────────────────────────────
-    "Restart Service"            : ApprovalMode.AUTO,
-
+    "Restart Service": ApprovalMode.AUTO,
     # ── CPU / performance remediations ────────────────────────────────────
-    "Reduce CPU Frequency"       : ApprovalMode.AUTO,
-    "Enable CPU Throttling"      : ApprovalMode.AUTO,
-
+    "Reduce CPU Frequency": ApprovalMode.AUTO,
+    "Enable CPU Throttling": ApprovalMode.AUTO,
     # ── Memory remediations ───────────────────────────────────────────────
-    "Isolate Memory Bank"        : ApprovalMode.MANUAL,   # data loss risk
-
+    "Isolate Memory Bank": ApprovalMode.MANUAL,  # data loss risk
     # ── Power remediations (dangerous — require human sign-off) ──────────
-    "Power Cycle Node"           : ApprovalMode.MANUAL,
-    "Shutdown System"            : ApprovalMode.MANUAL,
-    "Emergency Shutdown"         : ApprovalMode.MANUAL,
-
+    "Power Cycle Node": ApprovalMode.MANUAL,
+    "Shutdown System": ApprovalMode.MANUAL,
+    "Emergency Shutdown": ApprovalMode.MANUAL,
     # ── Voltage remediations ──────────────────────────────────────────────
-    "Check PSU Voltage"          : ApprovalMode.AUTO,
-    "Switch to Redundant PSU"    : ApprovalMode.MANUAL,
+    "Check PSU Voltage": ApprovalMode.AUTO,
+    "Switch to Redundant PSU": ApprovalMode.MANUAL,
 }
 
 # Default for any action string not listed above — err on the side of safety
@@ -88,6 +83,7 @@ DEFAULT_POLICY = ApprovalMode.MANUAL
 
 
 # ── Evaluator ─────────────────────────────────────────────────────────────────
+
 
 def evaluate_policy(action: str) -> ApprovalMode:
     """

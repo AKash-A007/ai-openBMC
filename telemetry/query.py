@@ -12,13 +12,13 @@ from datetime import datetime, timedelta, timezone
 
 from database import fetch_by_sensor, fetch_all, count_rows
 
-
 # ── Core history functions ────────────────────────────────────────────────────
 
 import time
 
 _query_cache = {}
 CACHE_TTL_SECONDS = 2.0
+
 
 def get_sensor_history(sensor: str, limit: int = 100) -> list[float]:
     """
@@ -68,9 +68,9 @@ def get_sensor_history_full(sensor: str, limit: int = 100) -> list[dict]:
     res = [
         {
             "timestamp": row["timestamp"],
-            "sensor"   : row["sensor"],
-            "value"    : row["value"],
-            "status"   : row["status"],
+            "sensor": row["sensor"],
+            "value": row["value"],
+            "status": row["status"],
         }
         for row in rows
     ]
@@ -86,12 +86,12 @@ def get_latest_reading(sensor: str) -> dict | None:
     rows = fetch_by_sensor(sensor, limit=1)
     if not rows:
         return None
-    row = rows[-1]   # fetch_by_sensor returns oldest→newest, so last = most recent
+    row = rows[-1]  # fetch_by_sensor returns oldest→newest, so last = most recent
     return {
         "timestamp": row["timestamp"],
-        "sensor"   : row["sensor"],
-        "value"    : row["value"],
-        "status"   : row["status"],
+        "sensor": row["sensor"],
+        "value": row["value"],
+        "status": row["status"],
     }
 
 
@@ -102,6 +102,7 @@ def get_all_sensor_names() -> list[str]:
 
 
 # ── Aggregate / summary functions ─────────────────────────────────────────────
+
 
 def get_sensor_stats(sensor: str, limit: int = 100) -> dict:
     """
@@ -114,14 +115,17 @@ def get_sensor_stats(sensor: str, limit: int = 100) -> dict:
         return {"sensor": sensor, "count": 0}
 
     return {
-        "sensor" : sensor,
-        "count"  : len(values),
-        "latest" : values[-1],
-        "min"    : min(values),
-        "max"    : max(values),
-        "avg"    : round(sum(values) / len(values), 2),
-        "trend"  : "rising" if values[-1] > values[0] else
-                   "falling" if values[-1] < values[0] else "stable",
+        "sensor": sensor,
+        "count": len(values),
+        "latest": values[-1],
+        "min": min(values),
+        "max": max(values),
+        "avg": round(sum(values) / len(values), 2),
+        "trend": (
+            "rising"
+            if values[-1] > values[0]
+            else "falling" if values[-1] < values[0] else "stable"
+        ),
     }
 
 
@@ -129,10 +133,10 @@ def get_database_summary() -> dict:
     """High-level overview — total rows, sensors tracked, per-sensor counts."""
     sensors = get_all_sensor_names()
     return {
-        "total_rows"   : count_rows(),
-        "sensor_count" : len(sensors),
-        "sensors"      : sensors,
-        "per_sensor"   : {s: len(get_sensor_history(s, limit=100_000)) for s in sensors},
+        "total_rows": count_rows(),
+        "sensor_count": len(sensors),
+        "sensors": sensors,
+        "per_sensor": {s: len(get_sensor_history(s, limit=100_000)) for s in sensors},
     }
 
 

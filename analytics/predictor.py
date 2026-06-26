@@ -35,10 +35,9 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent / "telemetry"))
 sys.path.append(str(Path(__file__).resolve().parent))
 
-from query import get_sensor_history             # noqa: E402
-from features import extract_features            # noqa: E402
-from anomaly_detector import detect_anomalies     # noqa: E402
-
+from query import get_sensor_history  # noqa: E402
+from features import extract_features  # noqa: E402
+from anomaly_detector import detect_anomalies  # noqa: E402
 
 # ── Config — sensor-specific thresholds ───────────────────────────────────────
 
@@ -49,37 +48,38 @@ from anomaly_detector import detect_anomalies     # noqa: E402
 SENSOR_RULES = {
     "CPU_TEMP": {
         "critical_max": 90,
-        "warning_max" : 80,
-        "trend_danger": 3.0,     # °C per reading — fast climb
+        "warning_max": 80,
+        "trend_danger": 3.0,  # °C per reading — fast climb
     },
     "DIMM_TEMP": {
         "critical_max": 75,
-        "warning_max" : 65,
+        "warning_max": 65,
         "trend_danger": 2.0,
     },
     "FAN_SPEED": {
-        "critical_max": 2200,    # inverted — LOW rpm is the danger
-        "warning_max" : 2500,
-        "trend_danger": -50.0,   # falling fast is the danger sign
-        "inverted"    : True,
+        "critical_max": 2200,  # inverted — LOW rpm is the danger
+        "warning_max": 2500,
+        "trend_danger": -50.0,  # falling fast is the danger sign
+        "inverted": True,
     },
     "PSU_VOLTAGE": {
         "critical_max": 12.45,
-        "warning_max" : 12.30,
+        "warning_max": 12.30,
         "trend_danger": 0.05,
     },
 }
 
 DEFAULT_RULES = {
     "critical_max": 90,
-    "warning_max" : 80,
+    "warning_max": 80,
     "trend_danger": 3.0,
 }
 
-ANOMALY_COUNT_DANGER = 5   # more than this many recent anomalies is itself a risk signal
+ANOMALY_COUNT_DANGER = 5  # more than this many recent anomalies is itself a risk signal
 
 
 # ── Risk category mapping ─────────────────────────────────────────────────────
+
 
 def categorize_risk(probability: float) -> str:
     """
@@ -97,6 +97,7 @@ def categorize_risk(probability: float) -> str:
 
 
 # ── Core prediction logic ─────────────────────────────────────────────────────
+
 
 def predict_failure(sensor: str, limit: int = 200) -> dict:
     """
@@ -118,23 +119,23 @@ def predict_failure(sensor: str, limit: int = 200) -> dict:
             "features": { ...from features.py... }
         }
     """
-    values   = get_sensor_history(sensor, limit=limit)
-    rules    = SENSOR_RULES.get(sensor, DEFAULT_RULES)
+    values = get_sensor_history(sensor, limit=limit)
+    rules = SENSOR_RULES.get(sensor, DEFAULT_RULES)
     inverted = rules.get("inverted", False)
 
     if len(values) < 3:
         return {
-            "sensor"              : sensor,
-            "failure_probability" : 0.0,
-            "risk"                : "UNKNOWN",
-            "message"             : "Not enough history to predict — need at least 3 readings.",
+            "sensor": sensor,
+            "failure_probability": 0.0,
+            "risk": "UNKNOWN",
+            "message": "Not enough history to predict — need at least 3 readings.",
         }
 
     features = extract_features(values)
-    latest   = values[-1]
+    latest = values[-1]
 
     probability = 0.0
-    factors     = {}
+    factors = {}
 
     # ── Factor 1: threshold breach ──────────────────────────────────────────
     threshold_score = 0.0
@@ -155,12 +156,14 @@ def predict_failure(sensor: str, limit: int = 200) -> dict:
     anomaly_score = 0.0
     try:
         anomaly_result = detect_anomalies(sensor, limit=limit)
-        anomaly_count  = anomaly_result.get("anomaly_count", 0)
+        anomaly_count = anomaly_result.get("anomaly_count", 0)
         if anomaly_count > ANOMALY_COUNT_DANGER:
             anomaly_score = 0.3
         elif anomaly_count > 0:
             # Scale partial credit: more anomalies = more risk, capped at 0.3
-            anomaly_score = round(min(anomaly_count / ANOMALY_COUNT_DANGER, 1.0) * 0.3, 3)
+            anomaly_score = round(
+                min(anomaly_count / ANOMALY_COUNT_DANGER, 1.0) * 0.3, 3
+            )
     except Exception:
         # Anomaly detector needs >=10 readings to train — if it's not ready
         # yet, this factor simply contributes 0 rather than breaking prediction
@@ -169,8 +172,8 @@ def predict_failure(sensor: str, limit: int = 200) -> dict:
     factors["anomaly_count"] = anomaly_score
 
     # ── Factor 3: trend ──────────────────────────────────────────────────────
-    trend_score  = 0.0
-    trend        = features["trend"]
+    trend_score = 0.0
+    trend = features["trend"]
     trend_danger = rules["trend_danger"]
 
     if inverted:
@@ -187,11 +190,11 @@ def predict_failure(sensor: str, limit: int = 200) -> dict:
     probability = round(min(probability, 1.0), 3)
 
     return {
-        "sensor"              : sensor,
-        "failure_probability" : probability,
-        "risk"                : categorize_risk(probability),
+        "sensor": sensor,
+        "failure_probability": probability,
+        "risk": categorize_risk(probability),
         "contributing_factors": factors,
-        "features"            : features,
+        "features": features,
     }
 
 

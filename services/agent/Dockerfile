@@ -3,7 +3,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY telemetry/ ./telemetry/
-COPY db/ ./db/
 COPY automation/ ./automation/
 COPY agent.py rag_engine.py parser.py ./
 COPY knowledge/ ./knowledge/

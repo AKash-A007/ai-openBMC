@@ -38,10 +38,10 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 sys.path.append(str(Path(__file__).resolve().parent.parent / "telemetry"))
-from database import get_connection, init_db   # noqa: E402
-
+from database import get_connection, init_db  # noqa: E402
 
 # ── Table bootstrap ───────────────────────────────────────────────────────────
+
 
 def _ensure_table() -> None:
     init_db()  # creates telemetry + diagnoses tables first
@@ -68,6 +68,7 @@ def _ensure_table() -> None:
 
 
 # ── AuditLogger ───────────────────────────────────────────────────────────────
+
 
 class AuditLogger:
     """
@@ -97,14 +98,14 @@ class AuditLogger:
 
     def log(
         self,
-        issue      : str,
-        action     : str,
-        status     : str,
-        executed_by: str  = "auto",
-        policy     : str  = "AUTO",
-        sensor     : str  = "UNKNOWN",
-        severity   : str  = "UNKNOWN",
-        details    : str  = "",
+        issue: str,
+        action: str,
+        status: str,
+        executed_by: str = "auto",
+        policy: str = "AUTO",
+        sensor: str = "UNKNOWN",
+        severity: str = "UNKNOWN",
+        details: str = "",
         duration_ms: float = 0.0,
     ) -> int:
         """
@@ -128,8 +129,18 @@ class AuditLogger:
                      status, severity, details, duration_ms)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (timestamp, issue, sensor, action, executed_by, policy,
-                 status, severity, details, duration_ms),
+                (
+                    timestamp,
+                    issue,
+                    sensor,
+                    action,
+                    executed_by,
+                    policy,
+                    status,
+                    severity,
+                    details,
+                    duration_ms,
+                ),
             )
             return cursor.lastrowid
 
@@ -165,20 +176,16 @@ class AuditLogger:
     def count(self) -> int:
         """Total number of audit log entries."""
         with get_connection() as conn:
-            return conn.execute(
-                "SELECT COUNT(*) as c FROM audit_log"
-            ).fetchone()["c"]
+            return conn.execute("SELECT COUNT(*) as c FROM audit_log").fetchone()["c"]
 
     def stats(self) -> dict:
         """Aggregate counts by status — useful for the dashboard summary."""
         with get_connection() as conn:
-            rows = conn.execute(
-                """
+            rows = conn.execute("""
                 SELECT status, COUNT(*) as cnt
                 FROM audit_log
                 GROUP BY status
-                """
-            ).fetchall()
+                """).fetchall()
         return {row["status"]: row["cnt"] for row in rows}
 
 
@@ -190,27 +197,27 @@ if __name__ == "__main__":
     print("AuditLogger — self-test")
 
     row_id = logger.log(
-        issue       = "CPU_OVERHEAT",
-        action      = "Increase Fan Speed",
-        status      = "SUCCESS",
-        executed_by = "auto",
-        policy      = "AUTO",
-        sensor      = "CPU0",
-        severity    = "CRITICAL",
-        details     = "Fan speed set to 100%. CPU temp: 105°C → 82°C",
-        duration_ms = 145.2,
+        issue="CPU_OVERHEAT",
+        action="Increase Fan Speed",
+        status="SUCCESS",
+        executed_by="auto",
+        policy="AUTO",
+        sensor="CPU0",
+        severity="CRITICAL",
+        details="Fan speed set to 100%. CPU temp: 105°C → 82°C",
+        duration_ms=145.2,
     )
     print(f"Logged row id: {row_id}")
 
     row_id2 = logger.log(
-        issue       = "POWER_SUPPLY_FAILURE",
-        action      = "Shutdown System",
-        status      = "PENDING",
-        executed_by = "ops-engineer@company.com",
-        policy      = "MANUAL",
-        sensor      = "PSU1",
-        severity    = "CRITICAL",
-        details     = "Waiting for human approval",
+        issue="POWER_SUPPLY_FAILURE",
+        action="Shutdown System",
+        status="PENDING",
+        executed_by="ops-engineer@company.com",
+        policy="MANUAL",
+        sensor="PSU1",
+        severity="CRITICAL",
+        details="Waiting for human approval",
     )
     print(f"Logged row id: {row_id2}")
 
@@ -219,5 +226,7 @@ if __name__ == "__main__":
 
     print("\nLast 5 entries:")
     for entry in logger.get_log(limit=5):
-        print(f"  [{entry['timestamp'][:19]}] {entry['action']} "
-              f"({entry['status']}) — {entry['issue']}")
+        print(
+            f"  [{entry['timestamp'][:19]}] {entry['action']} "
+            f"({entry['status']}) — {entry['issue']}"
+        )
