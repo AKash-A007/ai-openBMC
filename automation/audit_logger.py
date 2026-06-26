@@ -46,7 +46,8 @@ from database import get_connection, init_db  # noqa: E402
 def _ensure_table() -> None:
     init_db()  # creates telemetry + diagnoses tables first
     with get_connection() as conn:
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS audit_log (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp   TEXT    NOT NULL,
@@ -60,11 +61,14 @@ def _ensure_table() -> None:
                 details     TEXT,
                 duration_ms REAL    DEFAULT 0
             );
-        """)
-        conn.execute("""
+        """
+        )
+        conn.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_audit_timestamp
             ON audit_log (timestamp);
-        """)
+        """
+        )
 
 
 # ── AuditLogger ───────────────────────────────────────────────────────────────
@@ -181,11 +185,13 @@ class AuditLogger:
     def stats(self) -> dict:
         """Aggregate counts by status — useful for the dashboard summary."""
         with get_connection() as conn:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT status, COUNT(*) as cnt
                 FROM audit_log
                 GROUP BY status
-                """).fetchall()
+                """
+            ).fetchall()
         return {row["status"]: row["cnt"] for row in rows}
 
 

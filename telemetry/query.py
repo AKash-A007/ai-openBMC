@@ -9,6 +9,7 @@ dashboards, or the FastAPI layer.
 """
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from database import fetch_by_sensor, fetch_all, count_rows
 
@@ -16,7 +17,7 @@ from database import fetch_by_sensor, fetch_all, count_rows
 
 import time
 
-_query_cache = {}
+_query_cache: dict[tuple[str, int, str], tuple[list[Any], float]] = {}
 CACHE_TTL_SECONDS = 2.0
 
 

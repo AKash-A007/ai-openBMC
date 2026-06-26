@@ -6,6 +6,7 @@ exclude = '''
 /(
     \.git
   | \.venv
+  | venv
   | __pycache__
   | chroma_db
   | telemetry/db
@@ -14,7 +15,7 @@ exclude = '''
 
 [tool.flake8]
 max-line-length = 88
-exclude = [".git", "__pycache__", ".venv", "chroma_db"]
+exclude = [".git", "__pycache__", ".venv", "venv", "chroma_db"]
 
 [tool.mypy]
 python_version = "3.11"

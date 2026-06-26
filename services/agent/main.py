@@ -235,9 +235,9 @@ def _save_incidents(incidents: list) -> None:
         json.dump(incidents, f, indent=2)
 
 
-_approval_manager: ApprovalManager | None = None
-_execution_engine: ExecutionEngine | None = None
-_audit_logger: AuditLogger | None = None
+_approval_manager: ApprovalManager = None  # type: ignore
+_execution_engine: ExecutionEngine = None  # type: ignore
+_audit_logger: AuditLogger = None  # type: ignore
 
 
 @asynccontextmanager

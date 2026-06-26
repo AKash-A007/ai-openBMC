@@ -442,7 +442,8 @@ def init_db() -> None:
     with get_connection() as conn:
         if DB_TYPE == "postgres":
             # PostgreSQL Schema
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS telemetry (
                     id        SERIAL PRIMARY KEY,
                     timestamp TEXT    NOT NULL,
@@ -450,8 +451,10 @@ def init_db() -> None:
                     value     DOUBLE PRECISION NOT NULL,
                     status    TEXT    NOT NULL
                 );
-            """)
-            conn.execute("""
+            """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS diagnoses (
                     id         SERIAL PRIMARY KEY,
                     timestamp  TEXT    NOT NULL,
@@ -459,8 +462,10 @@ def init_db() -> None:
                     root_cause TEXT    NOT NULL,
                     confidence DOUBLE PRECISION NOT NULL
                 );
-            """)
-            conn.execute("""
+            """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS audit_log (
                     id          SERIAL PRIMARY KEY,
                     timestamp   TEXT    NOT NULL,
@@ -474,8 +479,10 @@ def init_db() -> None:
                     details     TEXT,
                     duration_ms DOUBLE PRECISION DEFAULT 0
                 );
-            """)
-            conn.execute("""
+            """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS approval_requests (
                     id           TEXT    PRIMARY KEY,
                     issue        TEXT    NOT NULL,
@@ -489,10 +496,12 @@ def init_db() -> None:
                     resolved_by  TEXT,
                     notes        TEXT    DEFAULT ''
                 );
-            """)
+            """
+            )
         else:
             # SQLite Schema
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS telemetry (
                     id        INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp TEXT    NOT NULL,
@@ -500,8 +509,10 @@ def init_db() -> None:
                     value     REAL    NOT NULL,
                     status    TEXT    NOT NULL
                 );
-            """)
-            conn.execute("""
+            """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS diagnoses (
                     id         INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp  TEXT    NOT NULL,
@@ -509,8 +520,10 @@ def init_db() -> None:
                     root_cause TEXT    NOT NULL,
                     confidence REAL    NOT NULL
                 );
-            """)
-            conn.execute("""
+            """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS audit_log (
                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp   TEXT    NOT NULL,
@@ -524,8 +537,10 @@ def init_db() -> None:
                     details     TEXT,
                     duration_ms REAL    DEFAULT 0
                 );
-            """)
-            conn.execute("""
+            """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS approval_requests (
                     id           TEXT    PRIMARY KEY,
                     issue        TEXT    NOT NULL,
@@ -539,21 +554,28 @@ def init_db() -> None:
                     resolved_by  TEXT,
                     notes        TEXT    DEFAULT ''
                 );
-            """)
+            """
+            )
 
         # Indexes are the same for both DBs
-        conn.execute("""
+        conn.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_sensor_timestamp
             ON telemetry (sensor, timestamp);
-        """)
-        conn.execute("""
+        """
+        )
+        conn.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_diagnoses_sensor_timestamp
             ON diagnoses (sensor, timestamp);
-        """)
-        conn.execute("""
+        """
+        )
+        conn.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_audit_timestamp
             ON audit_log (timestamp);
-        """)
+        """
+        )
 
     if DB_TYPE == "postgres":
         print(f"[DB] Initialised PostgreSQL database")

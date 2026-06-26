@@ -81,7 +81,8 @@ def _ensure_table() -> None:
     """Create the approval_requests table if it doesn't exist."""
     init_db()
     with get_connection() as conn:
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS approval_requests (
                 id           TEXT PRIMARY KEY,
                 issue        TEXT NOT NULL,
@@ -95,7 +96,8 @@ def _ensure_table() -> None:
                 resolved_by  TEXT,
                 notes        TEXT DEFAULT ''
             );
-        """)
+        """
+        )
 
 
 def _persist(req: ApprovalRequest) -> None:
@@ -284,7 +286,9 @@ if __name__ == "__main__":
 
     # Approve it
     mgr.approve(req.id, approved_by="ops-engineer")
-    print(f"After approve   : status={mgr.get(req.id).status.value}")
+    req_after = mgr.get(req.id)
+    status_str = req_after.status.value if req_after else "None"
+    print(f"After approve   : status={status_str}")
 
     # Create and reject another
     req2 = mgr.request_approval(
@@ -295,7 +299,9 @@ if __name__ == "__main__":
         policy="MANUAL",
     )
     mgr.reject(req2.id, rejected_by="ops-lead", reason="Non-critical — monitor first")
-    print(f"After reject    : status={mgr.get(req2.id).status.value}")
+    req2_after = mgr.get(req2.id)
+    status_str2 = req2_after.status.value if req2_after else "None"
+    print(f"After reject    : status={status_str2}")
 
     print()
     print("Stats:", mgr.stats())

@@ -151,7 +151,7 @@ def _best_sentence(query: str, chunk: str) -> str:
 # but do not have exact word matches will be ranked higher than sentences that have exact word matches
 #  are not semantically similar.
 
-_rag_cache = {}
+_rag_cache: dict[tuple[str, int], str] = {}
 
 
 def rag_query(query: str, n_chunks: int = 1) -> str:

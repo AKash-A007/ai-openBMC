@@ -26,6 +26,7 @@ it just knows to call increase_fan_speed() and handle the result.
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
+from typing import Callable
 
 sys.path.append(str(Path(__file__).resolve().parent))
 
@@ -52,7 +53,7 @@ from audit_logger import AuditLogger
 # IMPORTANT: keys must exactly match the strings in policy_engine.POLICIES
 # and the recommendation strings your LLM returns.
 
-ACTION_MAP: dict[str, callable] = {
+ACTION_MAP: dict[str, Callable] = {
     "Increase Fan Speed": increase_fan_speed,
     "Reduce Fan Speed": reduce_fan_speed,
     "Restart Service": restart_service,

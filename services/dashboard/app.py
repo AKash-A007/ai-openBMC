@@ -137,7 +137,8 @@ with st.sidebar:
 
     st.divider()
     st.header("Pipeline Stages")
-    st.markdown("""
+    st.markdown(
+        """
 1. 🔍 **Detect** — Telemetry anomaly
 2. 🧠 **Diagnose** — RAG + LLM root cause
 3. 📈 **Predict** — Failure probability
@@ -145,19 +146,22 @@ with st.sidebar:
 5. ✅ **Approve** — Policy gate
 6. ⚡ **Execute** — Autonomous action
 7. 📓 **Audit** — Full trail
-""")
+"""
+    )
     st.caption("Phase D · ai-openBMC · Amritapuri")
 
 # ── Main Panel Control ────────────────────────────────────────────────────────
 
 if not st.session_state.get("token"):
     st.warning("🔒 Access Denied. Please log in from the sidebar using credentials.")
-    st.info("""
+    st.info(
+        """
     **Demo Users:**
     * **Admin:** `admin` / `admin123`
     * **Operator:** `operator` / `op123`
     * **Viewer:** `viewer` / `view123`
-    """)
+    """
+    )
 else:
     # ── Executive KPI Banner ──
     st.markdown("### 📊 Fleet Executive Dashboard")

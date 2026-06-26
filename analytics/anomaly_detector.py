@@ -301,7 +301,7 @@ if __name__ == "__main__":
     print("Demo: Isolation Forest on synthetic data")
     print("=" * 50)
 
-    demo_values = [70, 72, 71, 73, 74, 75, 150]
+    demo_values = [70.0, 72.0, 71.0, 73.0, 74.0, 75.0, 150.0]
     print(f"Input values: {demo_values}")
 
     data = _prepare_data(demo_values)

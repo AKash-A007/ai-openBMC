@@ -187,7 +187,8 @@ with st.sidebar:
 
     st.divider()
     st.header("Pipeline")
-    st.markdown("""
+    st.markdown(
+        """
 1. 🔍 **Detect** — Telemetry anomaly
 2. 🧠 **Diagnose** — RAG + LLM root cause
 3. 📈 **Predict** — Failure probability
@@ -195,7 +196,8 @@ with st.sidebar:
 5. ✅ **Approve** — Policy gate
 6. ⚡ **Execute** — Autonomous action
 7. 📓 **Audit** — Full trail
-""")
+"""
+    )
     st.divider()
     st.caption("Phase C Week 4 · ai-openBMC · Amritapuri")
 
@@ -450,9 +452,7 @@ with right:
                         )
                         st.caption(rem_result.get("details", ""))
                     else:
-                        st.warning(
-                            f"⚠️ **EXECUTED with issues** | Status: **{status}**"
-                        )
+                        st.warning(f"⚠️ **EXECUTED with issues** | Status: **{status}**")
                         if rem_result.get("rollback"):
                             st.info(
                                 f"↩️ Rollback: {rem_result['rollback'].get('status')}"
