@@ -1,0 +1,381 @@
+===============================================================================
+AI OpsBMC — YouTube Demo Video Script
+===============================================================================
+Working title options (pick one):
+  1. "I Built an AI That Autonomously Heals Server Hardware Failures"
+  2. "AI OpsBMC: From Sensor Alert to Self-Healing Server in 1.4 Seconds"
+  3. "This AI Diagnoses AND Fixes Server Failures — No Human Needed"
+
+Target length: 8–10 minutes
+Tone: confident, technical, demo-driven. Show, don't just tell.
+
+===============================================================================
+PART 0 — BEFORE YOU HIT RECORD (do this first, in this order)
+===============================================================================
+
+A. Environment prep
+   1. Close Slack/Discord/email — kill anything that can pop a notification.
+   2. Set terminal font size to 16–18pt so text is readable on a recording.
+   3. Set browser zoom to 100–110%, close all tabs except the dashboard.
+   4. Turn off OS "do not disturb" toggle ON (ironic but correct — turn it ON
+      so notifications don't interrupt).
+   5. Have THREE terminal tabs/panes ready, each pre-loaded with the venv
+      activated and the right working directory, so you never fumble typing
+      "cd" or "source venv/bin/activate" on camera:
+        Tab 1 — QEMU BMC simulator
+        Tab 2 — FastAPI backend (main.py)
+        Tab 3 — Streamlit dashboard (app.py)
+
+B. Start services BEFORE recording, verify they work, THEN stop them and
+   restart fresh on camera (so the audience sees the real boot sequence,
+   but you already know it works and won't hit a surprise error live).
+
+   Terminal 1 (QEMU):
+     qemu-system-arm \
+       -machine romulus-bmc \
+       -m 512 \
+       -drive file=tmp/deploy/images/romulus/obmc-phosphor-image-romulus.static.mtd,if=mtd,format=raw \
+       -serial mon:stdio -serial null \
+       -netdev user,id=net0,hostfwd=tcp::2443-:443 \
+       -net nic,netdev=net0
+     (wait ~60-90s for OpenBMC Linux to fully boot before touching the dashboard)
+
+   Terminal 2 (backend):
+     source venv/bin/activate
+     python main.py
+     # confirm you see: "Uvicorn running on http://0.0.0.0:8000"
+     # sanity check in a spare terminal: curl -s http://localhost:8000/health
+
+   Terminal 3 (dashboard):
+     source venv/bin/activate
+     streamlit run app.py
+     # opens http://localhost:8501
+
+C. Rehearse the click-path ONCE off-camera end to end:
+     Diagnosis tab → pick "CPU Overheat" → Run Diagnosis → Auto-Remediate
+     → Operations Hub tab → approve any pending action
+     → Audit & Timeline tab → expand an incident
+   This avoids dead air / hunting for buttons while recording.
+
+D. Recording tool settings
+   - OBS Studio (or ScreenStudio/Camtasia): 1920x1080, 30fps minimum, 60fps
+     if you can afford the file size.
+   - Record system audio OFF, mic ON, mic gain checked with a 5-second test
+     clip played back before the real take.
+   - Record webcam in a corner (optional) for the intro/outro talking-head
+     bits; can be OFF during the pure demo/screen sections.
+   - Do a 10-second test recording and check for audio sync / screen tearing
+     before the real take.
+
+===============================================================================
+PART 1 — SCRIPT (narration + on-screen actions, timestamped)
+===============================================================================
+
+--------------------------------------------------------------------
+[0:00 – 0:20] COLD OPEN / HOOK
+--------------------------------------------------------------------
+SHOW: Dashboard already open, sitting on the Diagnosis tab. Have a fault
+      scenario pre-selected. Cut straight to clicking "Auto-Remediate" and
+      let the audience see a result banner appear (either auto-executed or
+      routed to approval) within a couple seconds.
+
+SAY:
+  "This server just detected a CPU overheating event. Watch what happens
+   next — no human touched anything."
+  [pause 1-2s while the UI resolves]
+  "That's an AI diagnosing a hardware fault, deciding what to do about it,
+   and either fixing it — or asking a human for sign-off — completely on
+   its own. I built this. Let me show you how it works."
+
+--------------------------------------------------------------------
+[0:20 – 1:00] WHO YOU ARE / WHAT THIS IS
+--------------------------------------------------------------------
+SHOW: Talking head (webcam) or a title card with the project name.
+
+SAY:
+  "Hey, I'm Akash. This is AI OpsBMC — an AI-augmented, autonomous AIOps
+   platform built on top of OpenBMC, the open-source firmware that runs
+   inside real data-centre servers.
+   In one sentence: it takes raw hardware telemetry — CPU temps, fan
+   speeds, power supply readings, memory errors — and turns it into a
+   system that detects problems, explains WHY they happened, predicts
+   what's coming next, and can safely take action to fix it — with a full
+   audit trail of everything it did."
+
+--------------------------------------------------------------------
+[1:00 – 2:00] THE PROBLEM
+--------------------------------------------------------------------
+SHOW: Slide/title card with the bullet points below, OR just talking head.
+
+SAY:
+  "Here's the problem this solves. Server hardware failures cost
+   enterprises an estimated $5,600 per minute of downtime. Traditional
+   BMCs — OpenBMC, Dell iDRAC, AMI MegaRAC — give you raw sensor data, but
+   zero intelligence. A human has to look at a temperature spike, a fan
+   anomaly, a DIMM error, correlate them, figure out the root cause, and
+   manually run the fix. Under pressure. At 3 AM.
+   And the existing AIOps tools — Datadog, Dynatrace, New Relic — don't
+   help here because they're cloud-first, they need OS-level agents, and
+   none of them can act autonomously on hardware. They just alert you and
+   leave the fixing to a human.
+   AI OpsBMC closes that entire loop."
+
+--------------------------------------------------------------------
+[2:00 – 3:30] ARCHITECTURE OVERVIEW
+--------------------------------------------------------------------
+SHOW: Open README.md in the editor (or a rendered GitHub view) and scroll
+      to the architecture ASCII diagram / the "Intelligence Pipeline"
+      section. Alternatively, screen-share a whiteboard/diagram tool if
+      you prefer drawing it live.
+
+SAY:
+  "The whole system covers one operational loop:
+   Collect → Detect → Diagnose → Predict → Recommend → Approve → Execute
+   → Audit.
+
+   It's four independent microservices. The Collector polls the BMC over
+   Redfish — the standard REST API for server management — and writes
+   telemetry to a database. The Analytics service runs an Isolation
+   Forest model for unsupervised anomaly detection — no labelled failure
+   data required — plus a Random Forest predictor that forecasts failure
+   probability 1, 5, and 15 minutes out.
+
+   When something's flagged, the Agent service kicks in: a
+   Retrieval-Augmented Generation engine — ChromaDB plus an
+   all-MiniLM-L6-v2 embedding model — pulls in grounded domain knowledge
+   about that specific fault type, feeds it to an LLM, and produces a root
+   cause and a recommendation instead of a hallucinated guess.
+
+   Then — and this is the part most AIOps tools don't do — a Policy
+   Engine decides if that recommended action is safe to run
+   automatically, or if it needs a human to approve it first. Either way,
+   an Execution Engine runs it, a Rollback Manager watches system health
+   afterward and auto-undoes the action if things got worse, and an Audit
+   Logger records every single step, immutably."
+
+--------------------------------------------------------------------
+[3:30 – 4:15] LIVE DEMO SETUP (show the boot sequence)
+--------------------------------------------------------------------
+SHOW: Switch to Terminal 1, run the QEMU boot command live (or fast-forward
+      / speed-ramp this part in editing since boot takes ~60-90s — say so
+      on screen: "speeding this up" caption).
+      Then Terminal 2: `python main.py` — let the audience see the startup
+      log ("RAG index ready", "Automation pipeline ready", "Uvicorn
+      running on http://0.0.0.0:8000").
+      Then Terminal 3: `streamlit run app.py` — browser opens to
+      http://localhost:8501.
+
+SAY:
+  "Let's fire this up for real. First, a QEMU-emulated OpenBMC server —
+   this is a real ARM BMC firmware image, not a mock, so everything you're
+   about to see is happening against an actual Redfish endpoint.
+   [speed-ramp boot]
+   Now the backend — FastAPI, this is where the anomaly detection, RAG
+   diagnosis, and the whole policy/execution/audit pipeline lives.
+   And finally the dashboard — this is Streamlit, and it's what an
+   operator would actually use day to day."
+
+--------------------------------------------------------------------
+[4:15 – 4:45] DASHBOARD TOUR
+--------------------------------------------------------------------
+SHOW: Point the mouse at each part as you narrate: sidebar system status
+      badge, RAG chunk count, the pipeline steps list, then the three
+      tabs — Diagnosis / Operations Hub / Audit & Timeline.
+
+SAY:
+  "Quick tour. Sidebar shows backend health and how many knowledge-base
+   chunks are loaded for the RAG engine. Below that, live QEMU controls —
+   fetch real telemetry and diagnose it, not just canned scenarios.
+   Up top, three tabs: Diagnosis, where you trigger and review root-cause
+   analysis; Operations Hub, the live view of incidents, executed actions,
+   and anything waiting on human approval; and Audit & Timeline, the full
+   forensic record."
+
+--------------------------------------------------------------------
+[4:45 – 6:30] CORE DEMO — DIAGNOSIS + AUTO-REMEDIATION
+--------------------------------------------------------------------
+SHOW (do these clicks, narrate over each):
+  1. Diagnosis tab → open the scenario dropdown → select "CPU Overheat".
+  2. Point out the "Event details" code block (sensor, event, severity).
+  3. Click "Run Diagnosis". Wait for the spinner to resolve.
+  4. Point at the result: Severity badge, Confidence, Immediate-action
+     badge, then the Root Cause text and Recommendation text.
+  5. Expand "Knowledge base context used" — show the retrieved chunk.
+  6. Expand "Full diagnosis JSON" briefly — show it's structured, real
+     data, not a screenshot.
+  7. Go back, click "Auto-Remediate" this time instead of Run Diagnosis.
+  8. Show the outcome banner — either "Auto-executed" with a status, or
+     "Manual approval required" with an approval ID.
+
+SAY:
+  "Let's run a real scenario — CPU overheat. This is the exact sensor
+   event the backend would see from Redfish: sensor CPU0, event 'CPU Over
+   Temperature', severity CRITICAL.
+   Hit Run Diagnosis — this is a live RAG retrieval plus LLM call, not a
+   cached response.
+   [wait for result]
+   And there it is — severity, a confidence score, whether it needs
+   immediate action, and then the actual reasoning: root cause and
+   recommendation. I can expand this to see exactly which knowledge-base
+   passage the model grounded its answer in — that's what keeps this from
+   hallucinating a fake diagnosis.
+   Now watch what happens if I don't just diagnose — I click
+   Auto-Remediate instead. This runs the same diagnosis, then hands the
+   recommended action to the Policy Engine.
+   [wait for outcome]
+   [If AUTO]: 'Look at that — the policy engine decided this action was
+   safe to run without a human, executed it, and logged the result.'
+   [If manual]: 'This one needs a human sign-off — see the approval ID?
+   That request is now sitting in the Operations Hub. Let's go there.'"
+
+--------------------------------------------------------------------
+[6:30 – 7:30] OPERATIONS HUB — APPROVALS + LIVE STATE
+--------------------------------------------------------------------
+SHOW: Click "Operations Hub" tab. Point at the three panels: Active
+      Incidents, Executed Actions, Pending Approvals. If there's a
+      pending approval from the previous step, click "Approve" and show
+      it execute and disappear from the pending list.
+
+SAY:
+  "This is the command-center view. Active incidents on the left — real
+   open issues detected across the system. Executed actions in the
+   middle — a running feed of everything the system has already done
+   autonomously. And on the right, anything waiting on a human.
+   Let's approve this one.
+   [click Approve]
+   Executed. Notice it's gone from pending and will now show up in the
+   audit trail."
+
+--------------------------------------------------------------------
+[7:30 – 8:15] AUDIT & TIMELINE — THE TRUST LAYER
+--------------------------------------------------------------------
+SHOW: Click "Audit & Timeline" tab. Point at the four stat tiles
+      (Success/Failed/Pending/Rejected), scroll the audit dataframe, then
+      scroll down and expand one incident in the timeline to show the
+      Detected → Approved → Executed → Resolved steps.
+
+SAY:
+  "This is what makes autonomous action safe to trust: nothing happens
+   without a record. Every action — who ran it, what policy allowed it,
+   how long it took, whether it succeeded — is in this table.
+   And below that, the incident timeline shows the full lifecycle of a
+   single issue from the moment it was detected to the moment it was
+   resolved. This is the difference between 'an AI did something' and
+   'an AI did something, and I can prove exactly what, when, and why.'"
+
+--------------------------------------------------------------------
+[8:15 – 9:00] RESULTS / WHY IT WORKS
+--------------------------------------------------------------------
+SHOW: On-screen text overlay (add in editing) with these numbers pulled
+      straight from the project's evaluation:
+
+        Diagnosis accuracy:        91% (RAG + knowledge base)
+                                   vs. 71% LLM alone, 58% keyword rules
+        Anomaly detection:         F1 0.92 (Isolation Forest)
+                                   vs. 0.77 for static threshold rules
+        End-to-end MTTR:           ~1.4 seconds
+        Policy correctness:        97.4%
+        False approvals:           0%
+        Audit completeness:        100%
+
+SAY:
+  "This isn't just a demo toy — I benchmarked it. Grounding the LLM with
+   retrieval instead of asking it cold took diagnosis accuracy from 71%
+   to 91%. Isolation Forest anomaly detection beats static threshold
+   rules on every metric. And across 500 simulated remediation cycles,
+   the policy engine had a 0% false-approval rate and a fully complete
+   audit trail — every single time."
+
+--------------------------------------------------------------------
+[9:00 – 9:30] TECH STACK RECAP
+--------------------------------------------------------------------
+SHOW: Talking head, or a quick tech-logo montage (FastAPI, Streamlit,
+      ChromaDB, scikit-learn, Prometheus, Grafana, Docker, Kubernetes).
+
+SAY:
+  "Under the hood: FastAPI for the backend, Streamlit for this dashboard,
+   ChromaDB and sentence-transformers for retrieval, scikit-learn for
+   anomaly detection and prediction, Prometheus and Grafana for
+   observability, and it all ships as four Docker microservices with
+   Kubernetes manifests and JWT/RBAC security for production deployment."
+
+--------------------------------------------------------------------
+[9:30 – 10:00] WRAP-UP + CALL TO ACTION
+--------------------------------------------------------------------
+SHOW: Talking head. End card with: GitHub link, "Star the repo",
+      subscribe button animation, links to the research paper (PAPER.md).
+
+SAY:
+  "This started as a research project — there's a full paper linked
+   below if you want the technical deep-dive on the architecture and the
+   evaluation methodology. The code's open source, link's in the
+   description — go clone it, spin up the QEMU simulator yourself, and
+   break something. If you want to see the RAG pipeline, the policy
+   engine, or the rollback logic in more depth, tell me in the comments
+   and I'll make a follow-up video.
+   If this was useful, subscribe — and I'll see you in the next one."
+
+===============================================================================
+PART 2 — YOUTUBE METADATA (fill in when uploading)
+===============================================================================
+
+TITLE (pick one, ≤ 70 chars ideally):
+  "I Built an AI That Autonomously Heals Server Hardware Failures"
+
+DESCRIPTION TEMPLATE:
+  AI OpsBMC is an AI-augmented, autonomous AIOps platform built on
+  OpenBMC — it detects hardware faults, diagnoses root cause with
+  RAG + LLM, predicts failures before they happen, and can safely
+  execute (or request approval for) remediation actions — with a full
+  audit trail.
+
+  Pipeline: Collect → Detect → Diagnose → Predict → Recommend → Approve
+  → Execute → Audit
+
+  Results: 91% diagnosis accuracy, 0.92 F1 anomaly detection, ~1.4s
+  end-to-end MTTR, 0% false approvals, 100% audit completeness.
+
+  GitHub: <your repo URL>
+  Research paper: <link to PAPER.md on GitHub>
+
+  Timestamps:
+  0:00 Hook
+  0:20 Intro
+  1:00 The problem
+  2:00 Architecture
+  3:30 Live demo setup
+  4:45 Diagnosis + auto-remediation
+  6:30 Operations Hub
+  7:30 Audit & Timeline
+  8:15 Benchmark results
+  9:00 Tech stack
+  9:30 Wrap-up
+
+  #AIOps #OpenBMC #MachineLearning #DevOps #Python #FastAPI #Streamlit
+
+TAGS (comma separated for YouTube tag field):
+  AIOps, OpenBMC, autonomous remediation, RAG, retrieval augmented
+  generation, anomaly detection, isolation forest, server monitoring,
+  BMC, redfish, self-healing infrastructure, FastAPI, Streamlit,
+  machine learning, DevOps automation, predictive maintenance
+
+THUMBNAIL TEXT IDEAS (keep to 3-5 words, high contrast):
+  "AI FIXES ITS OWN SERVER"
+  "SELF-HEALING SERVERS"
+  "0 HUMANS. 1.4 SECONDS."
+
+===============================================================================
+PART 3 — POST-PRODUCTION CHECKLIST
+===============================================================================
+[ ] Cut dead air during QEMU boot (speed-ramp to 4-8x with a caption
+    "booting OpenBMC firmware...")
+[ ] Cut dead air during any LLM/RAG spinner waits longer than ~3s
+[ ] Add on-screen captions for the benchmark numbers section
+    (viewers skim — text overlays make stats land even on mute)
+[ ] Add lower-third labels the first time each new UI panel appears
+    (e.g. "Operations Hub", "Audit Log") so viewers always know where
+    they are
+[ ] Normalize audio levels (mic vs any background sound)
+[ ] Add subtitles/captions (auto-generate then hand-correct technical
+    terms: OpenBMC, Redfish, ChromaDB, Isolation Forest, RAG)
+[ ] End screen: link to 1-2 related videos + subscribe prompt

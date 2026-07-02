@@ -1,0 +1,28 @@
+[
+  {
+    "id": "15212aef-5334-4a15-a036-203f3b178989",
+    "issue": "DIMM_FAILURE",
+    "sensor": "DIMM_B2",
+    "severity": "HIGH",
+    "action": "Investigate the DIMM_B2 for potential hardware failure and consider replacing it if necessary.",
+    "policy": "MANUAL",
+    "approval_id": "b205af58-0398-41fc-98f9-14ed7aff4c47",
+    "execution": {
+      "action": "Investigate the DIMM_B2 for potential hardware failure and consider replacing it if necessary.",
+      "status": "FAILED",
+      "success": false,
+      "details": "No executor registered for action 'Investigate the DIMM_B2 for potential hardware failure and consider replacing it if necessary.'. Available: ['Increase Fan Speed', 'Reduce Fan Speed', 'Restart Service', 'Reduce CPU Frequency', 'Enable CPU Throttling', 'Isolate Memory Bank', 'Power Cycle Node', 'Shutdown System', 'Emergency Shutdown', 'Check PSU Voltage', 'Switch to Redundant PSU']",
+      "rollback": null,
+      "executed_by": "ops-dashboard",
+      "policy": "MANUAL",
+      "audit_id": 2,
+      "duration_ms": 0.0,
+      "timestamp": "2026-07-02T16:37:35.842508+00:00"
+    },
+    "detected_at": "2026-07-02T16:37:16.167857+00:00",
+    "approved_at": "2026-07-02T16:37:35.771252+00:00",
+    "executed_at": "2026-07-02T16:37:35.842508+00:00",
+    "resolved": false,
+    "resolved_at": null
+  }
+]

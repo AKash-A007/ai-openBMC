@@ -28,5 +28,20 @@
     "rag_context": "Memory ECC errors indicate that memory corruption has occurred.",
     "timestamp": "2026-06-16T06:04:13.891491Z",
     "duration_ms": 16679.14
+  },
+  {
+    "event": {
+      "sensor": "DIMM_B2",
+      "event": "Memory ECC Error",
+      "severity": "WARNING"
+    },
+    "root_cause": "A memory corruption event has occurred in DIMM_B2.",
+    "severity": "HIGH",
+    "confidence": "95%",
+    "recommendation": "Investigate the DIMM_B2 for potential hardware failure and consider replacing it if necessary.",
+    "requires_immediate_action": true,
+    "rag_context": "Memory ECC errors indicate that memory corruption has occurred.",
+    "timestamp": "2026-07-02T16:37:16.158901Z",
+    "duration_ms": 11745.93
   }
 ]
