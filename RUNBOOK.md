@@ -1,6 +1,6 @@
-# 🚀 AI OpsBMC — Complete Runbook (A to Z)
+# 🚀 AI OpsBMC — Complete Runbook (A to Z) — Ubuntu
 
-> **Everything you need** to set up, run, and debug every component — no mocks, all variables initialized, every step separated.
+> **Everything you need** to set up, run, and debug every component on **Ubuntu** — no mocks, all variables initialized, every step separated.
 
 ---
 
@@ -75,15 +75,24 @@ Event (sensor + fault)
 
 ## 2. Prerequisites
 
-| Tool | Min Version | Check Command |
-|------|-------------|---------------|
-| Python | 3.11+ | `python --version` |
-| pip | latest | `pip --version` |
-| Git | any | `git --version` |
-| Docker Desktop | latest (optional) | `docker --version` |
+| Tool | Min Version | Install Command |
+|------|-------------|-----------------|
+| Python | 3.11+ | `sudo apt install python3.11 python3.11-venv python3-pip` |
+| pip | latest | `python3 -m pip install --upgrade pip` |
+| Git | any | `sudo apt install git` |
+| curl | any | `sudo apt install curl` |
+| Docker Engine | latest (optional) | See [Docker docs](https://docs.docker.com/engine/install/ubuntu/) |
 | HuggingFace account | — | https://hf.co/settings/tokens |
 
-> **Windows note:** All commands below are for **PowerShell**. Run as a regular user (not Admin unless noted).
+> **Ubuntu note:** All commands below are for **bash**. Run as a regular user (use `sudo` only where noted).
+
+### Install system dependencies (one-time):
+
+```bash
+sudo apt update && sudo apt install -y \
+    python3.11 python3.11-venv python3-pip \
+    git curl build-essential libssl-dev libffi-dev
+```
 
 ---
 
@@ -91,43 +100,50 @@ Event (sensor + fault)
 
 ### 3.1 — Navigate to project root
 
-```powershell
-cd "C:\Users\Akash A\OneDrive\Desktop\ai-openBMC"
+```bash
+cd ~/Desktop/ai-openBMC
+# Or wherever you cloned the repo:
+# cd /path/to/ai-openBMC
 ```
 
 ### 3.2 — Create and activate virtual environment
 
-```powershell
+```bash
 # Create venv (only do this ONCE)
-python -m venv venv
+python3.11 -m venv venv
 
 # Activate it EVERY TIME you open a new terminal
-.\venv\Scripts\Activate.ps1
+source venv/bin/activate
 ```
 
-> If you get a scripts execution error, run this once:
-> ```powershell
-> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-> ```
+> You should see `(venv)` at the start of your prompt after activation.
 
 ### 3.3 — Verify you are in the venv
 
-```powershell
+```bash
 # You should see (venv) in your prompt
 python -c "import sys; print(sys.prefix)"
-# Expected output: ...ai-openBMC\venv
+# Expected output: .../ai-openBMC/venv
+
+which python
+# Expected: .../ai-openBMC/venv/bin/python
 ```
 
 ---
 
 ## 4. Create the `.env` File (All Variables)
 
-```powershell
+```bash
 # Copy the template
-Copy-Item .env.example .env
+cp .env.example .env
 ```
 
 Now open `.env` and set **every** variable below:
+
+```bash
+# Edit with nano (or vim / gedit / any editor)
+nano .env
+```
 
 ```dotenv
 # ─── BMC Connection ────────────────────────────────────────────────────────────
@@ -204,7 +220,7 @@ LOG_LEVEL=INFO
 
 ## 5. Install Dependencies
 
-```powershell
+```bash
 # Make sure venv is ACTIVE first (see step 3.2)
 pip install -r requirements.txt
 ```
@@ -213,7 +229,7 @@ pip install -r requirements.txt
 
 ### Verify key packages installed correctly:
 
-```powershell
+```bash
 python -c "import fastapi; print('FastAPI:', fastapi.__version__)"
 python -c "import streamlit; print('Streamlit:', streamlit.__version__)"
 python -c "import chromadb; print('ChromaDB:', chromadb.__version__)"
@@ -234,7 +250,7 @@ python -c "from dotenv import load_dotenv; print('python-dotenv: OK')"
 
 **Run once** (or after editing knowledge files):
 
-```powershell
+```bash
 python rag_engine.py
 ```
 
@@ -245,7 +261,7 @@ Batches: 100%|██████████| 1/1 [00:00<00:00]
 ```
 
 **Verify index has data:**
-```powershell
+```bash
 python -c "
 from rag_engine import _get_collection
 c = _get_collection()
@@ -255,12 +271,12 @@ print('Chunks in index:', c.count())
 ```
 
 **Force-rebuild** (after editing `.txt` files):
-```powershell
+```bash
 python -c "from rag_engine import build_index; build_index(force=True)"
 ```
 
 **Test a query:**
-```powershell
+```bash
 python -c "
 from rag_engine import build_index, rag_query
 build_index()
@@ -275,8 +291,8 @@ print(rag_query('Memory ECC error'))
 **What it does:** REST API on port 8000. Builds RAG index on startup. Exposes all diagnosis, remediation, approval, audit, and incident endpoints.
 
 **Open Terminal 1 and run:**
-```powershell
-.\venv\Scripts\Activate.ps1
+```bash
+source venv/bin/activate
 python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -292,8 +308,8 @@ INFO:     Uvicorn running on http://0.0.0.0:8000
 ```
 
 **Verify in a new terminal:**
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8000/health"
+```bash
+curl -s http://localhost:8000/health | python3 -m json.tool
 ```
 
 **Swagger UI (interactive):** http://localhost:8000/docs
@@ -305,8 +321,8 @@ Invoke-RestMethod -Uri "http://localhost:8000/health"
 > ⚠️ **Start FastAPI backend (6B) FIRST.**
 
 **Open Terminal 2 and run:**
-```powershell
-.\venv\Scripts\Activate.ps1
+```bash
+source venv/bin/activate
 streamlit run app.py
 ```
 
@@ -336,7 +352,7 @@ streamlit run app.py
 
 **Pre-condition:** `HF_TOKEN` must be in `.env`
 
-```powershell
+```bash
 python agent.py
 ```
 
@@ -355,7 +371,7 @@ python agent.py
 ```
 
 **Test a specific event:**
-```powershell
+```bash
 python -c "
 import os
 from dotenv import load_dotenv
@@ -383,7 +399,7 @@ print(json.dumps(result, indent=2))
 **What it does:** Maps raw event strings to structured categories for the LLM.
 
 **Test all 5 event patterns:**
-```powershell
+```bash
 python -c "
 from parser import parse_log
 
@@ -410,7 +426,7 @@ VR_CPU0      → {'sensor': 'VR_CPU0', 'category': 'POWER', 'event_type': 'VOLTA
 ```
 
 **Parse saved Redfish files** (needs `./redfish_data/`):
-```powershell
+```bash
 python -c "
 from parser import extract_all_events
 events = extract_all_events()
@@ -426,7 +442,7 @@ for e in events: print(' -', e)
 > ⚠️ Requires QEMU running OpenBMC on port 2443. Skip if using scenario mode.
 
 **Check if QEMU BMC is reachable:**
-```powershell
+```bash
 python -c "
 import requests, urllib3
 urllib3.disable_warnings()
@@ -440,7 +456,7 @@ except Exception as e:
 ```
 
 **Fetch all Redfish endpoints:**
-```powershell
+```bash
 python redfish_client.py
 ```
 
@@ -450,13 +466,13 @@ python redfish_client.py
   GET /redfish/v1  →  200
   GET /redfish/v1/Systems/system  →  200
   ...
-  Saved → redfish_data\system.json
+  Saved → redfish_data/system.json
 [Redfish] Done.
 ```
 
 **View what was fetched:**
-```powershell
-ls .\redfish_data\
+```bash
+ls ./redfish_data/
 python -c "
 import json
 d = json.load(open('redfish_data/system.json'))
@@ -470,7 +486,7 @@ print('System health:', d.get('Status', {}))
 
 **What it does:** Decides AUTO (execute now) or MANUAL (wait for approval).
 
-```powershell
+```bash
 python automation/policy_engine.py
 ```
 
@@ -493,7 +509,7 @@ MANUAL actions (require human approval):
 ```
 
 **Check any action:**
-```powershell
+```bash
 python -c "
 from automation.policy_engine import evaluate_policy
 for action in ['Increase Fan Speed', 'Shutdown System', 'Isolate Memory Bank', 'Unknown Action']:
@@ -507,7 +523,7 @@ for action in ['Increase Fan Speed', 'Shutdown System', 'Isolate Memory Bank', '
 
 **What it does:** Executes an approved action, handles rollback on failure, writes to audit log.
 
-```powershell
+```bash
 python automation/execution_engine.py
 ```
 
@@ -523,7 +539,7 @@ Details       : Fan speed increased to 80% on CPU0
 ```
 
 **Run a custom action:**
-```powershell
+```bash
 python -c "
 from automation.execution_engine import ExecutionEngine
 import json
@@ -546,7 +562,7 @@ print(json.dumps(result, indent=2, default=str))
 ### 6I — Telemetry Collector
 
 **Initialize the SQLite database first:**
-```powershell
+```bash
 python -c "
 import os
 os.environ.setdefault('DB_TYPE', 'sqlite')
@@ -558,7 +574,7 @@ print('Database initialized OK')
 ```
 
 **Run the collector:**
-```powershell
+```bash
 python -c "
 import os
 os.environ['DB_TYPE'] = 'sqlite'
@@ -572,9 +588,9 @@ main()
 
 ### 6J — Monitoring (Prometheus + Grafana)
 
-> Requires Docker Desktop running.
+> Requires Docker Engine running (`sudo systemctl start docker`).
 
-```powershell
+```bash
 # Start only monitoring (no build needed)
 docker compose up prometheus grafana -d
 
@@ -592,7 +608,7 @@ docker compose logs -f grafana
 
 ### 6K — Full Docker Stack
 
-```powershell
+```bash
 # Build and start all services
 docker compose up --build -d
 
@@ -627,7 +643,7 @@ docker compose down -v
 
 ### 7A — Policy Engine Tests (no dependencies, instant)
 
-```powershell
+```bash
 python -m pytest tests/test_policy_engine.py -v
 ```
 
@@ -637,7 +653,7 @@ Expected: `1 passed`
 
 ### 7B — Approval Manager Tests
 
-```powershell
+```bash
 python -m pytest tests/test_approval_manager.py -v
 ```
 
@@ -645,7 +661,7 @@ python -m pytest tests/test_approval_manager.py -v
 
 ### 7C — Database Tests (uses SQLite automatically)
 
-```powershell
+```bash
 python -m pytest tests/test_database.py -v
 ```
 
@@ -653,7 +669,7 @@ python -m pytest tests/test_database.py -v
 
 ### 7D — API Tests
 
-```powershell
+```bash
 python -m pytest tests/test_api.py -v
 ```
 
@@ -661,12 +677,12 @@ python -m pytest tests/test_api.py -v
 
 ### 7E — Full Suite with Coverage Report
 
-```powershell
+```bash
 python -m pytest tests/ -v --cov=. --cov-report=term-missing
 ```
 
 **Run only the fast tests** (skip LLM-dependent tests):
-```powershell
+```bash
 python -m pytest tests/test_policy_engine.py tests/test_approval_manager.py tests/test_database.py -v
 ```
 
@@ -701,114 +717,126 @@ Base URL: `http://localhost:8000`
 
 ## 9. Testing Every API Endpoint (curl)
 
-> All commands use PowerShell `Invoke-RestMethod`. Backend must be running on port 8000.
+> All commands use `curl`. Backend must be running on port 8000.
 
 ### Health Check
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8000/health"
+```bash
+curl -s http://localhost:8000/health | python3 -m json.tool
 ```
 
 ### List Scenarios
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8000/scenarios"
+```bash
+curl -s http://localhost:8000/scenarios | python3 -m json.tool
 ```
 
 ### Get a Specific Scenario
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8000/scenario/dimm_failure"
-Invoke-RestMethod -Uri "http://localhost:8000/scenario/cpu_overheat"
-Invoke-RestMethod -Uri "http://localhost:8000/scenario/psu_failure"
-Invoke-RestMethod -Uri "http://localhost:8000/scenario/fan_fault"
-Invoke-RestMethod -Uri "http://localhost:8000/scenario/voltage_fault"
+```bash
+curl -s http://localhost:8000/scenario/dimm_failure  | python3 -m json.tool
+curl -s http://localhost:8000/scenario/cpu_overheat  | python3 -m json.tool
+curl -s http://localhost:8000/scenario/psu_failure   | python3 -m json.tool
+curl -s http://localhost:8000/scenario/fan_fault     | python3 -m json.tool
+curl -s http://localhost:8000/scenario/voltage_fault | python3 -m json.tool
 ```
 
 ### Diagnose a Raw Event
-```powershell
-$body = @{sensor="DIMM_B2"; event="Memory ECC Error"; severity="WARNING"} | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8000/diagnose" -Method Post -Body $body -ContentType "application/json"
+```bash
+curl -s -X POST http://localhost:8000/diagnose \
+  -H "Content-Type: application/json" \
+  -d '{"sensor":"DIMM_B2","event":"Memory ECC Error","severity":"WARNING"}' \
+  | python3 -m json.tool
 ```
 
 ### Diagnose by Scenario Name
-```powershell
-$body = @{name="dimm_failure"} | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8000/diagnose/scenario" -Method Post -Body $body -ContentType "application/json"
+```bash
+curl -s -X POST http://localhost:8000/diagnose/scenario \
+  -H "Content-Type: application/json" \
+  -d '{"name":"dimm_failure"}' \
+  | python3 -m json.tool
 ```
 
 ### Get Diagnosis History
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8000/results?limit=5"
+```bash
+curl -s "http://localhost:8000/results?limit=5" | python3 -m json.tool
 ```
 
 ### Clear History
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8000/results" -Method Delete
+```bash
+curl -s -X DELETE http://localhost:8000/results | python3 -m json.tool
 ```
 
 ### Remediate (AUTO action — executes immediately)
-```powershell
-$body = @{
-    issue       = "CPU_OVERHEAT"
-    action      = "Increase Fan Speed"
-    sensor      = "CPU0"
-    severity    = "CRITICAL"
-    executed_by = "ops-engineer"
-} | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8000/remediate" -Method Post -Body $body -ContentType "application/json"
+```bash
+curl -s -X POST http://localhost:8000/remediate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "issue":       "CPU_OVERHEAT",
+    "action":      "Increase Fan Speed",
+    "sensor":      "CPU0",
+    "severity":    "CRITICAL",
+    "executed_by": "ops-engineer"
+  }' | python3 -m json.tool
 ```
 
 ### Remediate (MANUAL action — creates approval request)
-```powershell
-$body = @{
-    issue       = "DIMM_FAILURE"
-    action      = "Isolate Memory Bank"
-    sensor      = "DIMM_B2"
-    severity    = "WARNING"
-    executed_by = "ops-engineer"
-} | ConvertTo-Json
-$response = Invoke-RestMethod -Uri "http://localhost:8000/remediate" -Method Post -Body $body -ContentType "application/json"
+```bash
+RESPONSE=$(curl -s -X POST http://localhost:8000/remediate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "issue":       "DIMM_FAILURE",
+    "action":      "Isolate Memory Bank",
+    "sensor":      "DIMM_B2",
+    "severity":    "WARNING",
+    "executed_by": "ops-engineer"
+  }')
+echo "$RESPONSE" | python3 -m json.tool
+
 # Save the approval_id:
-$approvalId = $response.approval_id
-Write-Host "Approval ID: $approvalId"
+APPROVAL_ID=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['approval_id'])")
+echo "Approval ID: $APPROVAL_ID"
 ```
 
 ### List Pending Approvals
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8000/approvals?pending_only=true"
+```bash
+curl -s "http://localhost:8000/approvals?pending_only=true" | python3 -m json.tool
 ```
 
 ### Approve an Action
-```powershell
-# Paste your approval_id from the remediate response above
-$approvalId = "paste-uuid-here"
-$body = @{resolved_by="ops-engineer"; notes="Reviewed and approved"} | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8000/approvals/$approvalId/approve" -Method Post -Body $body -ContentType "application/json"
+```bash
+# Replace with your actual approval ID (from the remediate response above)
+APPROVAL_ID="paste-uuid-here"
+curl -s -X POST "http://localhost:8000/approvals/${APPROVAL_ID}/approve" \
+  -H "Content-Type: application/json" \
+  -d '{"resolved_by":"ops-engineer","notes":"Reviewed and approved"}' \
+  | python3 -m json.tool
 ```
 
 ### Reject an Action
-```powershell
-$approvalId = "paste-uuid-here"
-$body = @{resolved_by="ops-engineer"; notes="Too risky right now"} | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8000/approvals/$approvalId/reject" -Method Post -Body $body -ContentType "application/json"
+```bash
+APPROVAL_ID="paste-uuid-here"
+curl -s -X POST "http://localhost:8000/approvals/${APPROVAL_ID}/reject" \
+  -H "Content-Type: application/json" \
+  -d '{"resolved_by":"ops-engineer","notes":"Too risky right now"}' \
+  | python3 -m json.tool
 ```
 
 ### Get Audit Log
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8000/audit?limit=10"
+```bash
+curl -s "http://localhost:8000/audit?limit=10" | python3 -m json.tool
 ```
 
 ### Get Incident Timeline
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8000/incidents?limit=5"
+```bash
+curl -s "http://localhost:8000/incidents?limit=5" | python3 -m json.tool
 ```
 
 ### Fetch Live QEMU Data (only when QEMU is running)
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8000/fetch" -Method Post
+```bash
+curl -s -X POST http://localhost:8000/fetch | python3 -m json.tool
 ```
 
 ### Diagnose Live QEMU Events (run fetch first)
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8000/diagnose/live"
+```bash
+curl -s http://localhost:8000/diagnose/live | python3 -m json.tool
 ```
 
 ---
@@ -817,7 +845,7 @@ Invoke-RestMethod -Uri "http://localhost:8000/diagnose/live"
 
 ### Debug 1 — Test HuggingFace token
 
-```powershell
+```bash
 python -c "
 import os
 from dotenv import load_dotenv
@@ -841,7 +869,7 @@ print('LLM test response:', resp.choices[0].message.content.strip())
 
 ### Debug 2 — Test RAG pipeline
 
-```powershell
+```bash
 python -c "
 from rag_engine import build_index, rag_query, _get_collection
 
@@ -871,7 +899,7 @@ for q in queries:
 
 ### Debug 3 — Test full diagnosis pipeline (all 5 scenarios)
 
-```powershell
+```bash
 python -c "
 import os
 from dotenv import load_dotenv
@@ -908,7 +936,7 @@ for ev in events:
 
 ### Debug 4 — Test automation pipeline
 
-```powershell
+```bash
 python -c "
 from automation.policy_engine import evaluate_policy
 from automation.approval_manager import ApprovalManager
@@ -943,7 +971,7 @@ print('Pending count:', len(mgr.list_pending()))
 
 ### Debug 5 — Check all required paths exist
 
-```powershell
+```bash
 python -c "
 from pathlib import Path
 
@@ -963,7 +991,7 @@ for name, p in paths.items():
     if not p.exists(): all_ok = False
     print(f'{name:35} {status}')
 print()
-print('All paths OK:' if all_ok else 'Some paths are missing — see above')
+print('All paths OK' if all_ok else 'Some paths are missing — see above')
 "
 ```
 
@@ -971,7 +999,7 @@ print('All paths OK:' if all_ok else 'Some paths are missing — see above')
 
 ### Debug 6 — Create all missing directories
 
-```powershell
+```bash
 python -c "
 from pathlib import Path
 dirs = ['./knowledge', './redfish_data', './telemetry/db', './chroma_db']
@@ -992,12 +1020,12 @@ KeyError: 'HF_TOKEN'
 ```
 
 **Fix:**
-```powershell
+```bash
 # Check the key exists in .env
-Select-String "HF_TOKEN" .env
+grep HF_TOKEN .env
 
 # Add it if missing:
-Add-Content .env "HF_TOKEN=hf_yourRealTokenHere"
+echo 'HF_TOKEN=hf_yourRealTokenHere' >> .env
 ```
 
 ---
@@ -1005,7 +1033,7 @@ Add-Content .env "HF_TOKEN=hf_yourRealTokenHere"
 ### ❌ `RuntimeError: Index is empty. Run build_index() first.`
 
 **Fix:**
-```powershell
+```bash
 python -c "from rag_engine import build_index; build_index(force=True)"
 ```
 
@@ -1014,8 +1042,8 @@ python -c "from rag_engine import build_index; build_index(force=True)"
 ### ❌ `ValueError: No .txt files found in knowledge`
 
 **Fix:**
-```powershell
-ls .\knowledge\
+```bash
+ls ./knowledge/
 # Should show: cpu_failures.txt, dimm_failure.txt, psu_failures.txt
 # If missing, check git status:
 git status knowledge/
@@ -1033,19 +1061,24 @@ git checkout knowledge/
 ### ❌ `No module named 'automation'`
 
 **Fix:** Always run from the project root:
-```powershell
-cd "C:\Users\Akash A\OneDrive\Desktop\ai-openBMC"
+```bash
+cd ~/Desktop/ai-openBMC
+# Or:
+cd /path/to/ai-openBMC
 ```
 
 ---
 
 ### ❌ `Address already in use` on port 8000
 
-```powershell
+```bash
 # Find PID using port 8000
-netstat -ano | findstr :8000
-# Kill it (replace XXXX with the PID from last column)
-taskkill /PID XXXX /F
+sudo ss -tlnp | grep :8000
+# Or:
+sudo lsof -i :8000
+
+# Kill it (replace XXXX with the PID)
+kill -9 XXXX
 ```
 
 ---
@@ -1053,10 +1086,12 @@ taskkill /PID XXXX /F
 ### ❌ Streamlit shows "❌ Backend offline"
 
 FastAPI is not running. Start it first:
-```powershell
+```bash
 # Terminal 1:
+source venv/bin/activate
 python -m uvicorn main:app --port 8000 --reload
 # Wait for "Application startup complete" then open Terminal 2:
+source venv/bin/activate
 streamlit run app.py
 ```
 
@@ -1064,7 +1099,7 @@ streamlit run app.py
 
 ### ❌ `json.JSONDecodeError` from LLM response
 
-```powershell
+```bash
 # Debug raw LLM output:
 python -c "
 import os
@@ -1086,9 +1121,31 @@ print('Raw output:', repr(resp.choices[0].message.content))
 
 ---
 
-### ❌ `uvloop` warning on Windows
+### ❌ `Permission denied` when running Docker
 
-`uvloop` does not support Windows. This is harmless — uvicorn falls back to asyncio automatically.
+```bash
+# Add your user to the docker group (one-time fix, then re-login):
+sudo usermod -aG docker $USER
+newgrp docker
+
+# Verify:
+docker run hello-world
+```
+
+---
+
+### ❌ `python3: command not found` or wrong Python version
+
+```bash
+# Install Python 3.11:
+sudo apt install python3.11 python3.11-venv
+
+# Verify:
+python3.11 --version
+
+# Always use python3.11 to create the venv:
+python3.11 -m venv venv
+```
 
 ---
 
@@ -1158,14 +1215,22 @@ ai-openBMC/
 
 ## 🏁 Quick Start — The Minimum to Run Everything
 
-```powershell
+```bash
 # === ONE-TIME SETUP ===
-cd "C:\Users\Akash A\OneDrive\Desktop\ai-openBMC"
-.\venv\Scripts\Activate.ps1
+cd ~/Desktop/ai-openBMC
+
+# Install system dependencies (if not done already)
+sudo apt update && sudo apt install -y python3.11 python3.11-venv python3-pip git curl
+
+# Create and activate virtual environment
+python3.11 -m venv venv
+source venv/bin/activate
+
+# Install Python packages
 pip install -r requirements.txt
 
 # Edit .env and add your HF_TOKEN (mandatory!)
-notepad .env
+nano .env
 
 # Build the RAG index
 python -c "from rag_engine import build_index; build_index()"
@@ -1173,11 +1238,11 @@ python -c "from rag_engine import build_index; build_index()"
 # === EVERY TIME (2 terminals) ===
 
 # Terminal 1 — FastAPI Backend
-.\venv\Scripts\Activate.ps1
+source venv/bin/activate
 python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 # Terminal 2 — Streamlit UI
-.\venv\Scripts\Activate.ps1
+source venv/bin/activate
 streamlit run app.py
 ```
 
